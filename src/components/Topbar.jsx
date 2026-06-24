@@ -18,9 +18,16 @@ export function Topbar({ onMenuClick }) {
     return () => document.removeEventListener("mousedown", onClick)
   }, [])
 
-  const initials = user
-    ? `${(user.name || "")[0] || ""}${(user.lastname || "")[0] || ""}`.toUpperCase() || "U"
-    : "U"
+  // Be resilient to different backend user shapes (name/lastname, nombre/apellido, email).
+  const firstName = user?.name || user?.nombre || ""
+  const lastName = user?.lastname || user?.apellido || ""
+  const displayName =
+    `${firstName} ${lastName}`.trim() || user?.fullName || user?.nombreCompleto || user?.email || "Usuario"
+  const role = user?.role || user?.rol || ""
+  const initials =
+    (`${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase() ||
+      (displayName[0] || "").toUpperCase() ||
+      "U")
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-card px-4 sm:px-6">
