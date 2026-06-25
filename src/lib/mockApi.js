@@ -128,7 +128,7 @@ if (typeof window !== "undefined") {
     db = seed()
     save(db)
     // eslint-disable-next-line no-console
-    console.log("[v0] Mock DB reset to seed data.")
+    console.log("[SIGLA] Mock DB reset to seed data.")
   }
 }
 
