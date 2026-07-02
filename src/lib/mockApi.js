@@ -25,6 +25,15 @@ function shiftISO(days) {
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
 }
+function nowHM() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}
+// Deterministic pseudo attendance so the public view is stable across refreshes.
+function pseudoStudents(seedNum, capacidad) {
+  const pct = 0.45 + ((Number(seedNum) * 17) % 50) / 100 // 0.45–0.95
+  return Math.min(capacidad, Math.max(1, Math.round(capacidad * pct)))
+}
 
 const DAY_NUM = { LUNES: 1, MARTES: 2, MIERCOLES: 3, JUEVES: 4, VIERNES: 5, SABADO: 6, DOMINGO: 0 }
 
@@ -386,6 +395,79 @@ function route(method, path, query, body) {
         capacidadMaxima: l.capacidadMaxima,
         ocupados: sample[l.id] ?? 0,
       }))
+  }
+
+  // Public (no auth) ----------------------------------------------------------
+  if (p === "/public/laboratories/status" && method === "GET") {
+    const now = nowHM()
+    const today = todayISO()
+    const todaySessions = db.sessions.filter((s) => s.fecha === today)
+
+    const buildSesion = (s, lab, withStudents) => {
+      if (!s) return null
+      const doc = teacherOf(s.docenteId)
+      const mat = subjectOf(s.materiaId)
+      const base = {
+        materia: mat?.nombre ?? null,
+        docente: doc?.nombre ?? null,
+        horaInicio: s.horaInicio.slice(0, 5),
+        horaFin: s.horaFin.slice(0, 5),
+      }
+      if (withStudents) {
+        base.totalEstudiantes = pseudoStudents(s.id, lab.capacidadMaxima)
+        base.estadoSesion = s.estado
+      }
+      return base
+    }
+
+    return db.laboratories.map((lab) => {
+      const labSessions = todaySessions
+        .filter((s) => eqId(s.laboratorioId, lab.id) && s.estado !== "CANCELADA")
+        .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+      const current =
+        lab.estado === "ACTIVO"
+          ? labSessions.find(
+              (s) =>
+                s.estado === "EN_CURSO" ||
+                (s.horaInicio.slice(0, 5) <= now && now < s.horaFin.slice(0, 5)),
+            )
+          : null
+      const next = labSessions.find((s) => s.horaInicio.slice(0, 5) > now && !eqId(s.id, current?.id))
+
+      return {
+        id: lab.id,
+        codigo: lab.codigo,
+        nombre: lab.nombre,
+        tipo: lab.tipo,
+        capacidadMaxima: lab.capacidadMaxima,
+        estado: lab.estado,
+        sesionActual: buildSesion(current, lab, true),
+        proximaSesion: buildSesion(next, lab, false),
+      }
+    })
+  }
+
+  if (p === "/public/sessions/today" && method === "GET") {
+    const today = todayISO()
+    return db.sessions
+      .filter((s) => s.fecha === today)
+      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+      .map((s) => {
+        const lab = labOf(s.laboratorioId)
+        const doc = teacherOf(s.docenteId)
+        const mat = subjectOf(s.materiaId)
+        return {
+          id: s.id,
+          materia: mat?.nombre ?? null,
+          docente: doc?.nombre ?? null,
+          laboratorio: lab?.nombre ?? null,
+          codigoLab: lab?.codigo ?? null,
+          horaInicio: s.horaInicio.slice(0, 5),
+          horaFin: s.horaFin.slice(0, 5),
+          totalEstudiantes: lab ? pseudoStudents(s.id, lab.capacidadMaxima) : 0,
+          estado: s.estado,
+        }
+      })
   }
 
   // Fallback ------------------------------------------------------------------
