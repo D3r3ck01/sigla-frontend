@@ -218,8 +218,8 @@ export function PublicStatusPage() {
   }
 
   /* Faculty + program selects, reused on desktop header and mobile drawer.
-     Rendered via a plain function (not a nested component) to avoid remounting
-     the selects on every parent render. */
+     Rendered via a plain helper function (not a nested React component) so the
+     selects are not remounted on every parent render. */
   function renderFilterControls(variant = "header") {
     const isHeader = variant === "header"
     const selectClass = isHeader
