@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Plus, X } from "lucide-react"
+import { Plus, X, UserCheck, UserX } from "lucide-react"
 import { api } from "../../lib/api"
 import { useAsync, asList } from "../../lib/useAsync"
 import { useToast } from "../../context/ToastContext"
@@ -12,19 +12,16 @@ import { Modal } from "../../components/Modal"
 import { ConfirmDialog } from "../../components/ConfirmDialog"
 import { Field, Input, Select } from "../../components/Field"
 
-const empty = { nombre: "", correo: "" }
+const empty = { firstName: "", lastName: "", email: "", password: "" }
 
 export function TeachersTab() {
   const toast = useToast()
-  const { data, loading, refetch } = useAsync(() => api.get("/academic/teachers"), [])
-  const teachers = asList(data)
+  const { data, loading, refetch } = useAsync(() => api.get("/users?role=TEACHER"), [])
+  const teachers = asList(data).filter((u) => u.role === "TEACHER")
 
-  const { data: subjectsData } = useAsync(() => api.get("/academic/subjects"), [])
+  const { data: subjectsData } = useAsync(() => api.get("/subjects"), [])
   const subjects = asList(subjectsData)
-  const subjectName = useCallback(
-    (id) => subjects.find((s) => s.id === id)?.nombre || id,
-    [subjects],
-  )
+  const subjectName = useCallback((id) => subjects.find((s) => s.id === id)?.name || id, [subjects])
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -32,6 +29,7 @@ export function TeachersTab() {
   const [saving, setSaving] = useState(false)
   const [toDelete, setToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [busyId, setBusyId] = useState(null)
 
   // Assignment state (only meaningful when editing an existing teacher)
   const [assignments, setAssignments] = useState([])
@@ -39,18 +37,21 @@ export function TeachersTab() {
   const [newSubjectId, setNewSubjectId] = useState("")
   const [addingSubject, setAddingSubject] = useState(false)
 
-  const loadAssignments = useCallback(async (teacherId) => {
-    if (!teacherId) return
-    setLoadingAssign(true)
-    try {
-      const res = await api.get(`/academic/teacher-subjects?teacherId=${teacherId}`)
-      setAssignments(asList(res))
-    } catch (err) {
-      toast.error(err.message)
-    } finally {
-      setLoadingAssign(false)
-    }
-  }, [toast])
+  const loadAssignments = useCallback(
+    async (teacherId) => {
+      if (!teacherId) return
+      setLoadingAssign(true)
+      try {
+        const res = await api.get(`/users/${teacherId}/subject-assignments`)
+        setAssignments(asList(res))
+      } catch (err) {
+        toast.error(err.message)
+      } finally {
+        setLoadingAssign(false)
+      }
+    },
+    [toast],
+  )
 
   function openCreate() {
     setEditing(null)
@@ -61,7 +62,7 @@ export function TeachersTab() {
 
   function openEdit(t) {
     setEditing(t)
-    setForm({ nombre: t.nombre || "", correo: t.correo || "" })
+    setForm({ firstName: t.firstName || "", lastName: t.lastName || "", email: t.email || "", password: "" })
     setNewSubjectId("")
     setModalOpen(true)
   }
@@ -79,10 +80,21 @@ export function TeachersTab() {
     setSaving(true)
     try {
       if (editing) {
-        await api.put(`/academic/teachers/${editing.id}`, form)
+        await api.put(`/users/${editing.id}`, {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+        })
         toast.success("Docente actualizado correctamente.")
       } else {
-        await api.post("/academic/teachers", form)
+        await api.post("/users", {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          password: form.password,
+          role: "TEACHER",
+          enabled: true,
+        })
         toast.success("Docente creado correctamente.")
       }
       setModalOpen(false)
@@ -94,15 +106,31 @@ export function TeachersTab() {
     }
   }
 
+  async function toggleEnabled(t) {
+    setBusyId(t.id)
+    try {
+      await api.patch(`/users/${t.id}/${t.enabled ? "disable" : "enable"}`)
+      toast.success(t.enabled ? "Docente deshabilitado." : "Docente habilitado.")
+      refetch()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function handleAddSubject() {
     if (!newSubjectId || !editing) return
     setAddingSubject(true)
     try {
-      await api.post("/academic/teacher-subjects", { teacherId: editing.id, subjectId: newSubjectId })
+      await api.post("/teacher-subject-assignments", {
+        teacherId: editing.id,
+        subjectId: newSubjectId,
+        status: "ACTIVE",
+      })
       toast.success("Materia asignada correctamente.")
       setNewSubjectId("")
       await loadAssignments(editing.id)
-      refetch()
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -112,10 +140,9 @@ export function TeachersTab() {
 
   async function handleRemoveSubject(assignmentId) {
     try {
-      await api.del(`/academic/teacher-subjects/${assignmentId}`)
+      await api.del(`/teacher-subject-assignments/${assignmentId}`)
       toast.success("Materia desasignada correctamente.")
       await loadAssignments(editing.id)
-      refetch()
     } catch (err) {
       toast.error(err.message)
     }
@@ -124,7 +151,7 @@ export function TeachersTab() {
   async function handleDelete() {
     setDeleting(true)
     try {
-      await api.del(`/academic/teachers/${toDelete.id}`)
+      await api.del(`/users/${toDelete.id}`)
       toast.success("Docente eliminado correctamente.")
       setToDelete(null)
       refetch()
@@ -135,36 +162,34 @@ export function TeachersTab() {
     }
   }
 
-  // Subjects not yet assigned, for the add selector
-  const assignedSubjectIds = assignments.map((a) => a.subjectId ?? a.materiaId)
+  const assignedSubjectIds = assignments.map((a) => a.subjectId)
   const availableSubjects = subjects.filter((s) => !assignedSubjectIds.includes(s.id))
 
   const columns = [
-    { key: "nombre", header: "Nombre", render: (r) => <span className="font-medium">{r.nombre}</span> },
-    { key: "correo", header: "Correo", render: (r) => <span className="text-muted-foreground">{r.correo}</span> },
     {
-      key: "materias",
-      header: "Materias asignadas",
-      render: (r) => {
-        const list = r.materiasAsignadas || []
-        if (!list.length) return <span className="text-xs text-muted-foreground">Sin materias</span>
-        return (
-          <div className="flex flex-wrap gap-1">
-            {list.slice(0, 3).map((m, i) => (
-              <Badge key={i} tone="primary">
-                {subjectName(m)}
-              </Badge>
-            ))}
-            {list.length > 3 && <Badge tone="neutral">+{list.length - 3}</Badge>}
-          </div>
-        )
-      },
+      key: "name",
+      header: "Nombre",
+      render: (r) => <span className="font-medium">{`${r.firstName} ${r.lastName}`.trim()}</span>,
+    },
+    { key: "email", header: "Correo", render: (r) => <span className="text-muted-foreground">{r.email}</span> },
+    {
+      key: "enabled",
+      header: "Estado",
+      render: (r) => <Badge tone={r.enabled ? "success" : "neutral"}>{r.enabled ? "Habilitado" : "Deshabilitado"}</Badge>,
     },
     {
       key: "actions",
       header: "",
       align: "right",
-      render: (r) => <RowActions onEdit={() => openEdit(r)} onDelete={() => setToDelete(r)} />,
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button size="sm" variant="ghost" loading={busyId === r.id} onClick={() => toggleEnabled(r)}>
+            {r.enabled ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+            {r.enabled ? "Deshabilitar" : "Habilitar"}
+          </Button>
+          <RowActions onEdit={() => openEdit(r)} onDelete={() => setToDelete(r)} />
+        </div>
+      ),
     },
   ]
 
@@ -172,7 +197,7 @@ export function TeachersTab() {
     <Card>
       <CardHeader
         title="Docentes"
-        subtitle="Gestiona docentes y sus materias asignadas."
+        subtitle="Gestiona docentes (usuarios) y sus materias asignadas."
         action={
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" />
@@ -200,12 +225,28 @@ export function TeachersTab() {
         }
       >
         <form id="teacher-form" onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Nombre" required>
-            <Input required placeholder="Nombre completo" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} />
-          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Nombres" required>
+              <Input required placeholder="Ej. Carlos" value={form.firstName} onChange={(e) => set("firstName", e.target.value)} />
+            </Field>
+            <Field label="Apellidos" required>
+              <Input required placeholder="Ej. Vásquez" value={form.lastName} onChange={(e) => set("lastName", e.target.value)} />
+            </Field>
+          </div>
           <Field label="Correo" required>
-            <Input type="email" required placeholder="docente@uce.edu.ec" value={form.correo} onChange={(e) => set("correo", e.target.value)} />
+            <Input type="email" required placeholder="docente@uce.edu.ec" value={form.email} onChange={(e) => set("email", e.target.value)} />
           </Field>
+          {!editing && (
+            <Field label="Contraseña" required>
+              <Input
+                type="password"
+                required
+                placeholder="Contraseña temporal"
+                value={form.password}
+                onChange={(e) => set("password", e.target.value)}
+              />
+            </Field>
+          )}
         </form>
 
         {editing && (
@@ -225,7 +266,7 @@ export function TeachersTab() {
                     key={a.id}
                     className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 py-1 pl-3 pr-1.5 text-xs font-medium text-primary"
                   >
-                    {subjectName(a.subjectId ?? a.materiaId)}
+                    {subjectName(a.subjectId)}
                     <button
                       onClick={() => handleRemoveSubject(a.id)}
                       className="rounded-full p-0.5 hover:bg-primary/20"
@@ -245,7 +286,7 @@ export function TeachersTab() {
                     <option value="">Selecciona una materia…</option>
                     {availableSubjects.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.nombre}
+                        {s.name}
                       </option>
                     ))}
                   </Select>
@@ -266,7 +307,7 @@ export function TeachersTab() {
         onConfirm={handleDelete}
         loading={deleting}
         title="Eliminar docente"
-        message={`¿Seguro que deseas eliminar a "${toDelete?.nombre}"? Esta acción no se puede deshacer.`}
+        message={`¿Seguro que deseas eliminar a "${toDelete ? `${toDelete.firstName} ${toDelete.lastName}` : ""}"? Esta acción no se puede deshacer.`}
       />
     </Card>
   )

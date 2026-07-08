@@ -31,7 +31,8 @@ export function CrudTab({
   fields,
   emptyForm,
   toForm,
-  getName = (r) => r.nombre,
+  toPayload,
+  getName = (r) => r.name,
 }) {
   const toast = useToast()
   const { data, loading, refetch } = useAsync(() => api.get(endpoint), [])
@@ -63,12 +64,13 @@ export function CrudTab({
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
+    const payload = toPayload ? toPayload(form) : form
     try {
       if (editing) {
-        await api.put(`${endpoint}/${editing.id}`, form)
+        await api.put(`${endpoint}/${editing.id}`, payload)
         toast.success(`${entityLabel} actualizado correctamente.`)
       } else {
-        await api.post(endpoint, form)
+        await api.post(endpoint, payload)
         toast.success(`${entityLabel} creado correctamente.`)
       }
       setModalOpen(false)
@@ -158,6 +160,8 @@ export function CrudTab({
                   type={field.type || "text"}
                   required={field.required}
                   placeholder={field.placeholder}
+                  min={field.min}
+                  max={field.max}
                   value={form[field.name] ?? ""}
                   onChange={(e) => set(field.name, e.target.value)}
                 />

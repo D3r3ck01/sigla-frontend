@@ -51,7 +51,7 @@ export function Topbar({ onMenuClick }) {
           {periods.length === 0 && <option value="">Sin periodos</option>}
           {periods.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.nombre} {p.estado === "ACTIVO" ? "(Activo)" : ""}
+              {p.name} {p.status === "ACTIVE" ? "(Activo)" : ""}
             </option>
           ))}
         </Select>

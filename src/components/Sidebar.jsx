@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { NavLink } from "react-router-dom"
 import {
   LayoutDashboard,
@@ -7,20 +8,50 @@ import {
   ClipboardList,
   LogOut,
   FlaskRound,
+  Monitor,
+  AlertTriangle,
 } from "lucide-react"
 import { cn } from "../lib/utils"
+import { api } from "../lib/api"
+import { asList } from "../lib/useAsync"
 import { useAuth } from "../context/AuthContext"
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/academic", label: "Académico", icon: GraduationCap },
   { to: "/laboratories", label: "Laboratorios", icon: FlaskConical },
+  { to: "/admin/inventory", label: "Inventario", icon: Monitor },
+  { to: "/admin/incidents", label: "Incidencias", icon: AlertTriangle, badge: "incidents" },
   { to: "/scheduling/base-schedules", label: "Horarios", icon: CalendarDays },
   { to: "/sessions", label: "Sesiones", icon: ClipboardList },
 ]
 
+const INCIDENT_REFRESH_MS = 60000
+
 export function Sidebar({ open, onNavigate }) {
   const { logout } = useAuth()
+  const [incidentCount, setIncidentCount] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    async function loadCount() {
+      try {
+        const [open, inProgress] = await Promise.all([
+          api.get("/incidents?status=OPEN").catch(() => []),
+          api.get("/incidents?status=IN_PROGRESS").catch(() => []),
+        ])
+        if (active) setIncidentCount(asList(open).length + asList(inProgress).length)
+      } catch {
+        /* keep last known count */
+      }
+    }
+    loadCount()
+    const interval = setInterval(loadCount, INCIDENT_REFRESH_MS)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [])
 
   return (
     <>
@@ -76,6 +107,11 @@ export function Sidebar({ open, onNavigate }) {
                     )}
                     <Icon className="h-5 w-5 shrink-0" />
                     <span>{item.label}</span>
+                    {item.badge === "incidents" && incidentCount > 0 && (
+                      <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-danger-foreground">
+                        {incidentCount > 99 ? "99+" : incidentCount}
+                      </span>
+                    )}
                   </>
                 )}
               </NavLink>

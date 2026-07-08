@@ -11,7 +11,7 @@ import { Card, CardBody } from "../../components/Card"
 import { Button } from "../../components/Button"
 import { Modal } from "../../components/Modal"
 import { ConfirmDialog } from "../../components/ConfirmDialog"
-import { Field, Input, Select } from "../../components/Field"
+import { Select } from "../../components/Field"
 import { ScheduleSlotModal } from "./ScheduleSlotModal"
 
 const START_HOUR = 7
@@ -34,21 +34,21 @@ function toMinutes(t) {
 
 export function BaseSchedulesPage() {
   const toast = useToast()
-  const { selectedId: periodoId, selected } = usePeriod()
+  const { selectedId: academicPeriodId, selected } = usePeriod()
   const catalogs = useCatalogs()
 
   const [labFilter, setLabFilter] = useState("")
 
   const load = useCallback(() => {
-    if (!periodoId) return Promise.resolve([])
-    return api.get(`/base-schedules?periodoId=${periodoId}`)
-  }, [periodoId])
+    if (!academicPeriodId) return Promise.resolve([])
+    return api.get(`/academic-periods/${academicPeriodId}/base-schedules`)
+  }, [academicPeriodId])
 
-  const { data, loading, refetch } = useAsync(load, [periodoId])
+  const { data, loading, refetch } = useAsync(load, [academicPeriodId])
   const allSlots = asList(data)
 
   const slots = useMemo(
-    () => (labFilter ? allSlots.filter((s) => String(s.laboratorioId) === String(labFilter)) : allSlots),
+    () => (labFilter ? allSlots.filter((s) => String(s.laboratoryId) === String(labFilter)) : allSlots),
     [allSlots, labFilter],
   )
 
@@ -64,7 +64,7 @@ export function BaseSchedulesPage() {
     const map = new Map()
     let i = 0
     for (const s of slots) {
-      const key = s.materiaId ?? s.materia
+      const key = s.subjectId
       if (!map.has(key)) {
         map.set(key, PALETTE[i % PALETTE.length])
         i += 1
@@ -76,12 +76,12 @@ export function BaseSchedulesPage() {
   function openCreate(day, hour) {
     setEditing(null)
     setDefaults({
-      laboratorioId: labFilter || "",
+      laboratoryId: labFilter || "",
       ...(day
         ? {
-            diaSemana: day,
-            horaInicio: `${String(hour).padStart(2, "0")}:00`,
-            horaFin: `${String(Math.min(hour + 2, END_HOUR)).padStart(2, "0")}:00`,
+            weekDay: day,
+            startTime: `${String(hour).padStart(2, "0")}:00`,
+            endTime: `${String(Math.min(hour + 2, END_HOUR)).padStart(2, "0")}:00`,
           }
         : {}),
     })
@@ -108,7 +108,7 @@ export function BaseSchedulesPage() {
     }
   }
 
-  if (!periodoId) {
+  if (!academicPeriodId) {
     return (
       <div>
         <PageHeader title="Horario Base" description="Plantilla semanal de clases por periodo." />
@@ -125,7 +125,7 @@ export function BaseSchedulesPage() {
     <div>
       <PageHeader
         title="Horario Base"
-        description={`Plantilla semanal de clases${selected ? ` · ${selected.nombre}` : ""}.`}
+        description={`Plantilla semanal de clases${selected ? ` · ${selected.name}` : ""}.`}
         actions={
           <>
             <Button variant="secondary" onClick={() => setGenOpen(true)}>
@@ -147,8 +147,8 @@ export function BaseSchedulesPage() {
               <option value="">Todos los laboratorios</option>
               {catalogs.laboratories.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.codigo ? `${l.codigo} · ` : ""}
-                  {l.nombre}
+                  {l.code ? `${l.code} · ` : ""}
+                  {l.name}
                 </option>
               ))}
             </Select>
@@ -195,12 +195,17 @@ export function BaseSchedulesPage() {
         onClose={() => setModalOpen(false)}
         onSaved={refetch}
         catalogs={catalogs}
-        periodoId={periodoId}
+        academicPeriodId={academicPeriodId}
         editing={editing}
         defaults={defaults}
       />
 
-      <GenerateSessionsModal open={genOpen} onClose={() => setGenOpen(false)} periodoId={periodoId} selected={selected} />
+      <GenerateSessionsModal
+        open={genOpen}
+        onClose={() => setGenOpen(false)}
+        academicPeriodId={academicPeriodId}
+        selected={selected}
+      />
 
       <ConfirmDialog
         open={Boolean(toDelete)}
@@ -223,8 +228,8 @@ function Row({ hour, slots, catalogs, subjectColor, onCellClick, onSlotClick, on
       </div>
       {DAYS.map((d) => {
         const cellSlots = slots.filter((s) => {
-          const day = resolveDay(s.diaSemana)
-          const start = toMinutes((s.horaInicio || "").slice(0, 5))
+          const day = resolveDay(s.weekDay)
+          const start = toMinutes((s.startTime || "").slice(0, 5))
           return day?.value === d.value && start >= hour * 60 && start < (hour + 1) * 60
         })
         return (
@@ -244,7 +249,7 @@ function Row({ hour, slots, catalogs, subjectColor, onCellClick, onSlotClick, on
                 <div
                   key={s.id}
                   className={`group relative mb-1 rounded-md border-l-4 px-2 py-1.5 text-xs ${
-                    subjectColor.get(s.materiaId ?? s.materia) || "border-l-border bg-muted"
+                    subjectColor.get(s.subjectId) || "border-l-border bg-muted"
                   }`}
                 >
                   <button
@@ -253,13 +258,13 @@ function Row({ hour, slots, catalogs, subjectColor, onCellClick, onSlotClick, on
                     className="block w-full text-left"
                   >
                     <span className="block font-semibold text-foreground">
-                      {s.materiaNombre || s.materia || catalogs.subjectName(s.materiaId)}
+                      {s.subjectName || catalogs.subjectName(s.subjectId)}
                     </span>
                     <span className="block text-muted-foreground">
-                      {formatTime(s.horaInicio)}–{formatTime(s.horaFin)}
+                      {formatTime(s.startTime)}–{formatTime(s.endTime)}
                     </span>
                     <span className="block truncate text-muted-foreground">
-                      {s.laboratorioNombre || s.laboratorio || catalogs.labName(s.laboratorioId)}
+                      {s.laboratoryName || catalogs.labName(s.laboratoryId)}
                     </span>
                   </button>
                   <button
@@ -280,32 +285,17 @@ function Row({ hour, slots, catalogs, subjectColor, onCellClick, onSlotClick, on
   )
 }
 
-function GenerateSessionsModal({ open, onClose, periodoId, selected }) {
+function GenerateSessionsModal({ open, onClose, academicPeriodId, selected }) {
   const toast = useToast()
-  const [range, setRange] = useState({ fechaInicio: "", fechaFin: "" })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
 
-  function setField(field, val) {
-    setRange((r) => ({ ...r, [field]: val }))
-    setResult(null)
-  }
-
-  async function handleGenerate(e) {
-    e.preventDefault()
-    if (range.fechaInicio > range.fechaFin) {
-      toast.error("La fecha de inicio debe ser anterior a la fecha de fin.")
-      return
-    }
+  async function handleGenerate() {
     setLoading(true)
     setResult(null)
     try {
-      const res = await api.post("/sessions/generate", {
-        periodoId: Number(periodoId),
-        fechaInicio: range.fechaInicio,
-        fechaFin: range.fechaFin,
-      })
-      const count = res?.generadas ?? res?.generated ?? res?.count ?? (Array.isArray(res) ? res.length : null)
+      const res = await api.post(`/academic-periods/${academicPeriodId}/sessions/generate`)
+      const count = Array.isArray(res) ? res.length : (res?.count ?? null)
       setResult(count != null ? `Se generaron ${count} sesión(es) correctamente.` : "Sesiones generadas correctamente.")
       toast.success("Sesiones generadas.")
     } catch (err) {
@@ -325,32 +315,28 @@ function GenerateSessionsModal({ open, onClose, periodoId, selected }) {
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cerrar
           </Button>
-          <Button type="submit" form="gen-form" loading={loading}>
+          <Button loading={loading} onClick={handleGenerate}>
             <CalendarRange className="h-4 w-4" />
             Generar
           </Button>
         </>
       }
     >
-      <form id="gen-form" onSubmit={handleGenerate} className="space-y-4">
+      <div className="space-y-4">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Se crearán sesiones concretas a partir del horario base{selected ? ` de ${selected.nombre}` : ""} para cada
-          fecha dentro del rango seleccionado.
+          Se crearán sesiones concretas a partir del horario base
+          {selected ? ` de ${selected.name}` : ""} para todo el rango de fechas del periodo académico
+          {selected ? ` (${selected.startDate} → ${selected.endDate})` : ""}.
         </p>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Fecha inicio" required>
-            <Input type="date" required value={range.fechaInicio} onChange={(e) => setField("fechaInicio", e.target.value)} />
-          </Field>
-          <Field label="Fecha fin" required>
-            <Input type="date" required value={range.fechaFin} onChange={(e) => setField("fechaFin", e.target.value)} />
-          </Field>
-        </div>
+        <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2.5 text-sm text-info">
+          Las sesiones existentes del periodo dentro del rango serán regeneradas.
+        </p>
         {result && (
           <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2.5 text-sm text-success">
             {result}
           </div>
         )}
-      </form>
+      </div>
     </Modal>
   )
 }

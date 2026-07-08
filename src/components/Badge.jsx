@@ -23,28 +23,30 @@ export function Badge({ tone = "neutral", className, children }) {
   )
 }
 
-/* Maps domain status strings to label + tone. */
+/* Maps domain status strings (real backend enums) to label + tone. */
 export const STATUS_META = {
-  // Periodo
-  ACTIVO: { label: "Activo", tone: "success" },
-  CERRADO: { label: "Cerrado", tone: "danger" },
-  // Laboratorio
-  EN_MANTENIMIENTO: { label: "En mantenimiento", tone: "warning" },
-  // Sesión
-  PROGRAMADA: { label: "Programada", tone: "info" },
-  EN_CURSO: { label: "En curso", tone: "warning" },
-  FINALIZADA: { label: "Finalizada", tone: "success" },
-  CANCELADA: { label: "Cancelada", tone: "danger" },
-  // Asistencia docente
-  LLEGO: { label: "Llegó", tone: "success" },
-  RETRASO: { label: "Retraso", tone: "warning" },
-  NO_LLEGO: { label: "No llegó", tone: "danger" },
-  NO_REGISTRADA: { label: "No registrada", tone: "neutral" },
-  // Tipo de laboratorio
-  COMPUTO: { label: "Cómputo", tone: "info" },
-  REDES: { label: "Redes", tone: "primary" },
+  // Academic period / general status
+  ACTIVE: { label: "Activo", tone: "success" },
+  CLOSED: { label: "Cerrado", tone: "danger" },
+  INACTIVE: { label: "Inactivo", tone: "neutral" },
+  // Laboratory status
+  UNDER_MAINTENANCE: { label: "En mantenimiento", tone: "warning" },
+  // Session status
+  SCHEDULED: { label: "Programada", tone: "info" },
+  IN_PROGRESS: { label: "En curso", tone: "warning" },
+  FINISHED: { label: "Finalizada", tone: "success" },
+  CANCELLED: { label: "Cancelada", tone: "danger" },
+  // Teacher attendance
+  ARRIVED: { label: "Llegó", tone: "success" },
+  LATE: { label: "Retraso", tone: "warning" },
+  ABSENT: { label: "No llegó", tone: "danger" },
+  NOT_RECORDED: { label: "No registrada", tone: "neutral" },
+  // Laboratory type
+  COMPUTING: { label: "Cómputo", tone: "info" },
+  NETWORKS: { label: "Redes", tone: "primary" },
   INDUSTRIAL: { label: "Industrial", tone: "warning" },
-  TEORICO: { label: "Teórico", tone: "neutral" },
+  THEORETICAL: { label: "Teórico", tone: "neutral" },
+  OTHER: { label: "Otro", tone: "neutral" },
 }
 
 export function StatusBadge({ value, className }) {
