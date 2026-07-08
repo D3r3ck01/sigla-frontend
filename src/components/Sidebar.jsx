@@ -107,6 +107,11 @@ export function Sidebar({ open, onNavigate }) {
                     )}
                     <Icon className="h-5 w-5 shrink-0" />
                     <span>{item.label}</span>
+                    {item.badge === "incidents" && incidentCount > 0 && (
+                      <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-danger-foreground">
+                        {incidentCount > 99 ? "99+" : incidentCount}
+                      </span>
+                    )}
                   </>
                 )}
               </NavLink>
