@@ -13,21 +13,13 @@ import { Modal } from "../../components/Modal"
 import { ConfirmDialog } from "../../components/ConfirmDialog"
 import { Field, Input, Select } from "../../components/Field"
 
-const TYPES = [
-  { value: "COMPUTING", label: "Cómputo" },
-  { value: "NETWORKS", label: "Redes" },
-  { value: "INDUSTRIAL", label: "Industrial" },
-  { value: "THEORETICAL", label: "Teórico" },
-  { value: "OTHER", label: "Otro" },
-]
-
 const STATES = [
   { value: "ACTIVE", label: "Activo" },
   { value: "UNDER_MAINTENANCE", label: "En mantenimiento" },
   { value: "CLOSED", label: "Cerrado" },
 ]
 
-const empty = { code: "", name: "", type: "COMPUTING", capacity: "", status: "ACTIVE", facultyId: "" }
+const empty = { code: "", name: "", categoryId: "", capacity: "", status: "ACTIVE", facultyId: "" }
 
 export function LaboratoriesPage() {
   const toast = useToast()
@@ -38,7 +30,11 @@ export function LaboratoriesPage() {
   const faculties = asList(facultiesData)
   const facultyName = (id) => faculties.find((f) => f.id === id)?.name || "—"
 
-  const [typeFilter, setTypeFilter] = useState("")
+  const { data: categoriesData } = useAsync(() => api.get("/laboratory-categories"), [])
+  const categories = asList(categoriesData)
+  const categoryName = (id) => categories.find((c) => c.id === id)?.name || "—"
+
+  const [categoryFilter, setCategoryFilter] = useState("")
   const [stateFilter, setStateFilter] = useState("")
   const [search, setSearch] = useState("")
 
@@ -51,7 +47,7 @@ export function LaboratoriesPage() {
 
   const filtered = useMemo(() => {
     return labs.filter((l) => {
-      if (typeFilter && l.type !== typeFilter) return false
+      if (categoryFilter && String(l.categoryId) !== String(categoryFilter)) return false
       if (stateFilter && l.status !== stateFilter) return false
       if (search) {
         const q = search.toLowerCase()
@@ -59,7 +55,7 @@ export function LaboratoriesPage() {
       }
       return true
     })
-  }, [labs, typeFilter, stateFilter, search])
+  }, [labs, categoryFilter, stateFilter, search])
 
   function openCreate() {
     setEditing(null)
@@ -72,7 +68,7 @@ export function LaboratoriesPage() {
     setForm({
       code: l.code || "",
       name: l.name || "",
-      type: l.type || "COMPUTING",
+      categoryId: l.categoryId || "",
       capacity: l.capacity ?? "",
       status: l.status || "ACTIVE",
       facultyId: l.facultyId || "",
@@ -123,7 +119,7 @@ export function LaboratoriesPage() {
     { key: "code", header: "Código", render: (r) => <span className="font-mono text-xs font-medium">{r.code}</span> },
     { key: "name", header: "Nombre", render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "faculty", header: "Facultad", render: (r) => facultyName(r.facultyId) },
-    { key: "type", header: "Tipo", render: (r) => <StatusBadge value={r.type} /> },
+    { key: "category", header: "Categoría", render: (r) => categoryName(r.categoryId) },
     { key: "capacity", header: "Capacidad", align: "center", render: (r) => r.capacity },
     { key: "status", header: "Estado", render: (r) => <StatusBadge value={r.status} /> },
     {
@@ -159,11 +155,11 @@ export function LaboratoriesPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="sm:w-44">
-              <option value="">Todos los tipos</option>
-              {TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+            <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="sm:w-44">
+              <option value="">Todas las categorías</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </Select>
@@ -220,11 +216,12 @@ export function LaboratoriesPage() {
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Tipo" required>
-              <Select value={form.type} onChange={(e) => set("type", e.target.value)}>
-                {TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+            <Field label="Categoría" required>
+              <Select required value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
+                <option value="">Selecciona una categoría…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </Select>

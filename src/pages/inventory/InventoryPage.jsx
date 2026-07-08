@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Monitor, Cpu, HardDrive, MemoryStick, AlertTriangle } from "lucide-react"
+import { Monitor, Package, AlertTriangle } from "lucide-react"
 import { api } from "../../lib/api"
 import { useAsync, asList } from "../../lib/useAsync"
 import { useToast } from "../../context/ToastContext"
@@ -15,15 +15,16 @@ import { IncidentFormModal } from "../incidents/IncidentFormModal"
 import { wsStatusMeta, EQUIPMENT_STATUS_LABEL, hasEquipment } from "../../lib/labUi"
 
 const WS_STATUSES = [
-  { value: "AVAILABLE", label: "Disponible" },
+  { value: "ACTIVE", label: "Activa" },
   { value: "UNDER_MAINTENANCE", label: "En mantenimiento" },
-  { value: "OUT_OF_SERVICE", label: "Fuera de servicio" },
+  { value: "INACTIVE", label: "Inactiva" },
 ]
 
 const EQUIP_STATUSES = [
-  { value: "OPERATIONAL", label: "Operativo" },
+  { value: "ACTIVE", label: "Activo" },
   { value: "UNDER_MAINTENANCE", label: "En mantenimiento" },
-  { value: "OUT_OF_SERVICE", label: "Fuera de servicio" },
+  { value: "DAMAGED", label: "Dañado" },
+  { value: "INACTIVE", label: "Inactivo" },
 ]
 
 function WsStatusBadge({ status }) {
@@ -44,12 +45,21 @@ export function InventoryPage() {
   const { data: labsData, loading: labsLoading } = useAsync(() => api.get("/laboratories"), [])
   const labs = asList(labsData)
 
+  const { data: labCatsData } = useAsync(() => api.get("/laboratory-categories"), [])
+  const labCategories = asList(labCatsData)
+  const categoryName = (id) => labCategories.find((c) => c.id === id)?.name || "—"
+
+  const { data: equipCatsData } = useAsync(() => api.get("/equipment-categories"), [])
+  const equipCategories = asList(equipCatsData)
+  const equipCategoryName = (id) => equipCategories.find((c) => c.id === id)?.name || "—"
+
   const [labId, setLabId] = useState("")
   const [workstations, setWorkstations] = useState([])
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(false)
 
   const [detail, setDetail] = useState(null) // workstation being viewed
+  const [detailSoftware, setDetailSoftware] = useState([])
   const [editing, setEditing] = useState(null) // workstation being edited
   const [wsStatus, setWsStatus] = useState("")
   const [eqStatus, setEqStatus] = useState("")
@@ -61,10 +71,10 @@ export function InventoryPage() {
   // Default to the first lab that actually has workstations once labs load.
   useEffect(() => {
     if (labId || !labs.length) return
-    const firstEquipped = labs.find((l) => hasEquipment(l.type)) || labs[0]
+    const firstEquipped = labs.find((l) => hasEquipment(categoryName(l.categoryId))) || labs[0]
     if (firstEquipped) setLabId(firstEquipped.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labs])
+  }, [labs, labCategories])
 
   async function loadInventory(id) {
     if (!id) {
@@ -75,8 +85,8 @@ export function InventoryPage() {
     setLoading(true)
     try {
       const [ws, eq] = await Promise.all([
-        api.get(`/workstations?laboratoryId=${id}`).catch(() => []),
-        api.get(`/equipment?laboratoryId=${id}`).catch(() => []),
+        api.get(`/laboratories/${id}/workstations`).catch(() => []),
+        api.get(`/laboratories/${id}/equipment`).catch(() => []),
       ])
       setWorkstations(asList(ws))
       setEquipment(asList(eq))
@@ -90,11 +100,32 @@ export function InventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labId])
 
+  // Fetch installed software for the equipment of the workstation being viewed.
+  useEffect(() => {
+    const eq = detail ? equipment.find((e) => String(e.workstationId) === String(detail.id)) : null
+    if (!eq) {
+      setDetailSoftware([])
+      return
+    }
+    let active = true
+    api
+      .get(`/equipment/${eq.id}/installed-software`)
+      .then((d) => active && setDetailSoftware(asList(d)))
+      .catch(() => active && setDetailSoftware([]))
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail])
+
   const equipmentByWs = useMemo(() => {
     const map = new Map()
-    for (const eq of equipment) if (eq.workstationId) map.set(String(eq.workstationId), eq)
+    for (const eq of equipment) {
+      if (eq.workstationId) map.set(String(eq.workstationId), { ...eq, categoryName: equipCategoryName(eq.categoryId) })
+    }
     return map
-  }, [equipment])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipment, equipCategories])
 
   const devices = useMemo(() => equipment.filter((e) => e.workstationId == null), [equipment])
 
@@ -150,8 +181,8 @@ export function InventoryPage() {
       header: "Estación",
       render: (r) => <span className="font-mono text-xs font-semibold">{r.code}</span>,
     },
-    { key: "row", header: "Fila", align: "center", render: (r) => r.row },
-    { key: "column", header: "Columna", align: "center", render: (r) => r.column },
+    { key: "rowNumber", header: "Fila", align: "center", render: (r) => r.rowNumber },
+    { key: "columnNumber", header: "Columna", align: "center", render: (r) => r.columnNumber },
     { key: "status", header: "Estado", render: (r) => <WsStatusBadge status={r.status} /> },
     {
       key: "equipment",
@@ -160,7 +191,7 @@ export function InventoryPage() {
         const eq = equipmentByWs.get(String(r.id))
         return eq ? (
           <span className="text-sm text-foreground">
-            {eq.brand} {eq.model}
+            <span className="font-mono text-xs">{eq.code}</span> · {eq.name}
           </span>
         ) : (
           <span className="text-sm text-muted-foreground">Sin equipo</span>
@@ -260,10 +291,10 @@ export function InventoryPage() {
                       <p className="mb-1.5 text-xs font-semibold text-foreground">Equipos de red / otros</p>
                       <ul className="space-y-1.5">
                         {devices.map((d) => (
-                          <li key={d.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">
-                              {d.brand} {d.model}
-                            </span>
+                          <li key={d.id} className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                            <span className="font-mono text-xs text-foreground">{d.code}</span>
+                            <span className="font-medium text-foreground">{d.name}</span>
+                            <span>· {equipCategoryName(d.categoryId)}</span>
                             <span>· {EQUIPMENT_STATUS_LABEL[d.status] || d.status}</span>
                           </li>
                         ))}
@@ -316,38 +347,31 @@ export function InventoryPage() {
             </div>
             {detailEquipment ? (
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="mb-3 text-sm font-semibold text-foreground">
-                  {detailEquipment.brand} {detailEquipment.model}
-                </p>
-                <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-muted-foreground">{detailEquipment.cpu || "—"}</span>
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{detailEquipment.name}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{detailEquipment.code}</p>
                   </div>
+                  <Badge tone="neutral">
+                    {EQUIPMENT_STATUS_LABEL[detailEquipment.status] || detailEquipment.status}
+                  </Badge>
+                </div>
+                <dl className="grid grid-cols-1 gap-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <MemoryStick className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-muted-foreground">{detailEquipment.ram || "—"}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <HardDrive className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-muted-foreground">{detailEquipment.storage || "—"}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge tone="neutral">
-                      {EQUIPMENT_STATUS_LABEL[detailEquipment.status] || detailEquipment.status}
-                    </Badge>
+                    <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <span className="text-muted-foreground">{equipCategoryName(detailEquipment.categoryId)}</span>
                   </div>
                 </dl>
-                {detailEquipment.softwareInstalled?.length > 0 && (
+                {detailSoftware.length > 0 && (
                   <div className="mt-3 border-t border-border pt-3">
                     <p className="mb-1.5 text-xs font-medium text-muted-foreground">Software instalado</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {detailEquipment.softwareInstalled.map((s) => (
+                      {detailSoftware.map((s) => (
                         <span
-                          key={s}
+                          key={s.id}
                           className="rounded-md bg-card px-2 py-0.5 text-xs text-foreground shadow-sm"
                         >
-                          {s}
+                          {s.name} {s.version}
                         </span>
                       ))}
                     </div>
@@ -390,7 +414,7 @@ export function InventoryPage() {
               </Select>
             </Field>
             {editingEquipment && (
-              <Field label={`Estado del equipo (${editingEquipment.brand} ${editingEquipment.model})`}>
+              <Field label={`Estado del equipo (${editingEquipment.code} · ${editingEquipment.name})`}>
                 <Select value={eqStatus} onChange={(e) => setEqStatus(e.target.value)}>
                   {EQUIP_STATUSES.map((s) => (
                     <option key={s.value} value={s.value}>

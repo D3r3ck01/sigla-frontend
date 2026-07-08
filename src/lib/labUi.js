@@ -62,22 +62,24 @@ export function getAvatarColor(name) {
 }
 
 // ── Workstation status → grid cell colors + Spanish label ────────────────────
+// Backend enum: ACTIVE | INACTIVE | UNDER_MAINTENANCE
 export const WS_STATUS_META = {
-  AVAILABLE: { label: "Disponible", bg: "#DCFCE7", border: "#86EFAC", dot: "#16A34A" },
-  OCCUPIED: { label: "Ocupada", bg: "#DBEAFE", border: "#93C5FD", dot: "#1D4ED8" },
+  ACTIVE: { label: "Activa", bg: "#DCFCE7", border: "#86EFAC", dot: "#16A34A" },
   UNDER_MAINTENANCE: { label: "Mantenimiento", bg: "#FEF3C7", border: "#FCD34D", dot: "#D97706" },
-  OUT_OF_SERVICE: { label: "Fuera de servicio", bg: "#FEE2E2", border: "#FCA5A5", dot: "#DC2626" },
+  INACTIVE: { label: "Inactiva", bg: "#FEE2E2", border: "#FCA5A5", dot: "#DC2626" },
 }
 
 export function wsStatusMeta(status) {
-  return WS_STATUS_META[status] || WS_STATUS_META.AVAILABLE
+  return WS_STATUS_META[status] || WS_STATUS_META.ACTIVE
 }
 
 // ── Equipment status → Spanish label ─────────────────────────────────────────
+// Backend enum: ACTIVE | INACTIVE | DAMAGED | UNDER_MAINTENANCE
 export const EQUIPMENT_STATUS_LABEL = {
-  OPERATIONAL: "Operativo",
+  ACTIVE: "Activo",
+  INACTIVE: "Inactivo",
+  DAMAGED: "Dañado",
   UNDER_MAINTENANCE: "En mantenimiento",
-  OUT_OF_SERVICE: "Fuera de servicio",
 }
 
 // ── Incident priority → colors + Spanish label ───────────────────────────────
@@ -100,18 +102,22 @@ export const INCIDENT_STATUS_LABEL = {
   CLOSED: "Cerrada",
 }
 
-// ── Incident category / type → Spanish label ─────────────────────────────────
-export const CATEGORY_LABEL = {
-  HARDWARE: "Hardware",
-  SOFTWARE: "Software",
-  NETWORKING: "Redes",
-  INFRASTRUCTURE: "Infraestructura",
-  OTHER: "Otro",
+// ── Incident severity → colors + Spanish label ───────────────────────────────
+// Backend enum: MINOR | MAJOR | CRITICAL
+export const SEVERITY_META = {
+  CRITICAL: { label: "Crítica", bg: "#FEE2E2", fg: "#B91C1C" },
+  MAJOR: { label: "Mayor", bg: "#FFEDD5", fg: "#C2410C" },
+  MINOR: { label: "Menor", bg: "#F3F4F6", fg: "#4B5563" },
 }
 
-export const INCIDENT_TYPE_LABEL = {
-  INCIDENT: "Incidencia",
-  REQUEST: "Solicitud",
+export const SEVERITY_LABEL = {
+  MINOR: "Menor",
+  MAJOR: "Mayor",
+  CRITICAL: "Crítica",
+}
+
+export function severityMeta(severity) {
+  return SEVERITY_META[severity] || SEVERITY_META.MINOR
 }
 
 export function isActiveIncident(i) {

@@ -6,17 +6,10 @@ import { Modal } from "../../components/Modal"
 import { Button } from "../../components/Button"
 import { Field, Select, Textarea } from "../../components/Field"
 
-const TYPES = [
-  { value: "INCIDENT", label: "Incidencia" },
-  { value: "REQUEST", label: "Solicitud" },
-]
-
-const CATEGORIES = [
-  { value: "HARDWARE", label: "Hardware" },
-  { value: "SOFTWARE", label: "Software" },
-  { value: "NETWORKING", label: "Redes" },
-  { value: "INFRASTRUCTURE", label: "Infraestructura" },
-  { value: "OTHER", label: "Otro" },
+const SEVERITIES = [
+  { value: "MINOR", label: "Menor" },
+  { value: "MAJOR", label: "Mayor" },
+  { value: "CRITICAL", label: "Crítica" },
 ]
 
 const PRIORITIES = [
@@ -31,8 +24,8 @@ function blankForm(initial = {}) {
     laboratoryId: initial.laboratoryId || "",
     workstationId: initial.workstationId || "",
     equipmentId: initial.equipmentId || "",
-    type: initial.type || "INCIDENT",
-    category: initial.category || "HARDWARE",
+    typeId: initial.typeId || "",
+    severity: initial.severity || "MINOR",
     description: initial.description || "",
     priority: initial.priority || "MEDIUM",
   }
