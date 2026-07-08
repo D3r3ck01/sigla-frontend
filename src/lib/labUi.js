@@ -15,13 +15,26 @@ export const TYPE_META = {
   OTHER: { Icon: Building2, bg: "#F3F4F6", fg: "#6B7280", label: "Otro" },
 }
 
-export function typeMeta(type) {
-  return TYPE_META[type] || TYPE_META.OTHER
+/**
+ * Resolves visual metadata from a laboratory *category name* (the backend no
+ * longer sends a `type` enum — categories are loaded dynamically). Matches the
+ * known category names, falling back to keyword detection then OTHER.
+ */
+export function typeMeta(categoryName) {
+  if (!categoryName) return TYPE_META.OTHER
+  const key = String(categoryName).toUpperCase()
+  if (TYPE_META[key]) return TYPE_META[key]
+  if (key.includes("COMPUT") || key.includes("CÓMPUT")) return TYPE_META.COMPUTING
+  if (key.includes("NETWORK") || key.includes("RED")) return TYPE_META.NETWORKS
+  if (key.includes("INDUSTR") || key.includes("INFRA")) return TYPE_META.INDUSTRIAL
+  if (key.includes("THEOR") || key.includes("TEOR") || key.includes("AULA")) return TYPE_META.THEORETICAL
+  return TYPE_META.OTHER
 }
 
-// Labs that keep workstation equipment.
-export function hasEquipment(type) {
-  return type === "COMPUTING" || type === "NETWORKS"
+// Labs that keep workstation equipment (accepts a category name).
+export function hasEquipment(categoryName) {
+  const meta = typeMeta(categoryName)
+  return meta === TYPE_META.COMPUTING || meta === TYPE_META.NETWORKS
 }
 
 // ── Header color by room status ──────────────────────────────────────────────
