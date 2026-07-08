@@ -543,7 +543,7 @@ const equipCategoryName = (id) => db.equipmentCategories.find((c) => eqId(c.id, 
 function inventoryResponse(labId) {
   const ws = stationsOf(labId)
   const eq = equipmentOf(labId)
-  const withCat = (e) => (e ? { ...e, categoryName: equipCategoryName(e.categoryId) } : null)
+  const withCat = (e) => (e ? { ...e, categoryName: equipCategoryName(e.categoryId) || e.categoryName || null } : null)
   const workstations = ws.map((w) => ({
     ...w,
     equipment: eq.filter((e) => eqId(e.workstationId, w.id)).map(withCat),
@@ -1007,6 +1007,8 @@ function route(method, path, query, body) {
         laboratoryId,
         workstationId: body.workstationId || null,
         categoryId: body.categoryId || null,
+        // Free-text category (used when "Other…" is chosen without a catalog id).
+        categoryName: body.categoryName || null,
         code: `EQ-${labNum}-${String(seq).padStart(3, "0")}`,
         name: body.name || "",
         status: body.status || "ACTIVE",
