@@ -978,6 +978,79 @@ function route(method, path, query, body) {
       })
   }
 
+  // Public (no auth) ----------------------------------------------------------
+  if (p === "/public/laboratories/status" && method === "GET") {
+    const now = nowHM()
+    const today = todayISO()
+    const todaySessions = db.sessions.filter((s) => s.fecha === today)
+
+    const buildSesion = (s, lab, withStudents) => {
+      if (!s) return null
+      const doc = teacherOf(s.docenteId)
+      const mat = subjectOf(s.materiaId)
+      const base = {
+        materia: mat?.nombre ?? null,
+        docente: doc?.nombre ?? null,
+        horaInicio: s.horaInicio.slice(0, 5),
+        horaFin: s.horaFin.slice(0, 5),
+      }
+      if (withStudents) {
+        base.totalEstudiantes = pseudoStudents(s.id, lab.capacidadMaxima)
+        base.estadoSesion = s.estado
+      }
+      return base
+    }
+
+    return db.laboratories.map((lab) => {
+      const labSessions = todaySessions
+        .filter((s) => eqId(s.laboratorioId, lab.id) && s.estado !== "CANCELADA")
+        .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+      const current =
+        lab.estado === "ACTIVO"
+          ? labSessions.find(
+              (s) =>
+                s.estado === "EN_CURSO" ||
+                (s.horaInicio.slice(0, 5) <= now && now < s.horaFin.slice(0, 5)),
+            )
+          : null
+      const next = labSessions.find((s) => s.horaInicio.slice(0, 5) > now && !eqId(s.id, current?.id))
+
+      return {
+        id: lab.id,
+        codigo: lab.codigo,
+        nombre: lab.nombre,
+        tipo: lab.tipo,
+        capacidadMaxima: lab.capacidadMaxima,
+        estado: lab.estado,
+        sesionActual: buildSesion(current, lab, true),
+        proximaSesion: buildSesion(next, lab, false),
+      }
+    })
+  }
+
+  if (p === "/public/sessions/today" && method === "GET") {
+    const today = todayISO()
+    return db.sessions
+      .filter((s) => s.fecha === today)
+      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+      .map((s) => {
+        const lab = labOf(s.laboratorioId)
+        const doc = teacherOf(s.docenteId)
+        const mat = subjectOf(s.materiaId)
+        return {
+          id: s.id,
+          materia: mat?.nombre ?? null,
+          docente: doc?.nombre ?? null,
+          laboratorio: lab?.nombre ?? null,
+          codigoLab: lab?.codigo ?? null,
+          horaInicio: s.horaInicio.slice(0, 5),
+          horaFin: s.horaFin.slice(0, 5),
+          totalEstudiantes: lab ? pseudoStudents(s.id, lab.capacidadMaxima) : 0,
+          estado: s.estado,
+        }
+      })
+  }
+
   // Fallback ------------------------------------------------------------------
   notFound()
 }
