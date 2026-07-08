@@ -8,13 +8,13 @@ import { User, Clock, CalendarCheck, Wrench, Lock } from "lucide-react"
  * - Cerrado   → gris
  */
 function getHeaderStyle(lab) {
-  if (lab.estado === "EN_MANTENIMIENTO") {
+  if (lab.status === "UNDER_MAINTENANCE") {
     return { bg: "bg-[#D97706]", badge: "MANTENIMIENTO" }
   }
-  if (lab.estado === "CERRADO") {
+  if (lab.status === "CLOSED") {
     return { bg: "bg-[#6B7280]", badge: "CERRADO" }
   }
-  if (lab.sesionActual) {
+  if (lab.currentSession) {
     return { bg: "bg-[#003B7A]", badge: "EN CURSO" }
   }
   return { bg: "bg-[#16A34A]", badge: "LIBRE" }
@@ -28,12 +28,12 @@ function occupancyColor(pct) {
 
 export function LabStatusCard({ lab }) {
   const { bg, badge } = getHeaderStyle(lab)
-  const session = lab.sesionActual
-  const next = lab.proximaSesion
+  const session = lab.currentSession
+  const next = lab.nextSession
 
   const pct =
-    session && lab.capacidadMaxima
-      ? Math.min(100, Math.round((session.totalEstudiantes / lab.capacidadMaxima) * 100))
+    session && lab.capacity
+      ? Math.min(100, Math.round((session.totalStudents / lab.capacity) * 100))
       : 0
 
   return (
@@ -42,8 +42,8 @@ export function LabStatusCard({ lab }) {
       <header className={`${bg} px-4 py-3 text-white`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm font-bold opacity-80">{lab.codigo}</p>
-            <h3 className="truncate text-base font-bold">{lab.nombre}</h3>
+            <p className="text-sm font-bold opacity-80">{lab.code}</p>
+            <h3 className="truncate text-base font-bold">{lab.name}</h3>
           </div>
           <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold">
             {badge}
@@ -53,13 +53,13 @@ export function LabStatusCard({ lab }) {
 
       {/* Body */}
       <div className="flex flex-1 flex-col gap-3 p-4">
-        {lab.estado === "EN_MANTENIMIENTO" ? (
+        {lab.status === "UNDER_MAINTENANCE" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
             <Wrench className="h-10 w-10 text-[#D97706]" aria-hidden="true" />
             <p className="text-base font-semibold text-[#D97706]">En mantenimiento</p>
             <p className="text-sm text-[#6B7280]">Temporalmente fuera de servicio</p>
           </div>
-        ) : lab.estado === "CERRADO" ? (
+        ) : lab.status === "CLOSED" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
             <Lock className="h-10 w-10 text-[#6B7280]" aria-hidden="true" />
             <p className="text-base font-semibold text-[#6B7280]">Cerrado</p>
@@ -67,15 +67,15 @@ export function LabStatusCard({ lab }) {
           </div>
         ) : session ? (
           <>
-            <p className="text-[15px] font-semibold text-[#1F2937]">{session.materia}</p>
+            <p className="text-[15px] font-semibold text-[#1F2937]">{session.subject}</p>
             <div className="flex items-center gap-2 text-sm text-[#374151]">
               <User className="h-4 w-4 shrink-0 text-[#6B7280]" aria-hidden="true" />
-              <span className="truncate">{session.docente}</span>
+              <span className="truncate">{session.teacher}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-[#374151]">
               <Clock className="h-4 w-4 shrink-0 text-[#6B7280]" aria-hidden="true" />
               <span>
-                {session.horaInicio} &ndash; {session.horaFin}
+                {session.startTime} &ndash; {session.endTime}
               </span>
             </div>
 
@@ -92,7 +92,7 @@ export function LabStatusCard({ lab }) {
                 />
               </div>
               <p className="mt-1 text-[13px] text-[#6B7280]">
-                {session.totalEstudiantes} / {lab.capacidadMaxima} estudiantes
+                {session.totalStudents} / {lab.capacity} estudiantes
               </p>
             </div>
 
@@ -102,7 +102,7 @@ export function LabStatusCard({ lab }) {
                   Próxima sesión
                 </p>
                 <p className="text-[13px] text-[#1F2937]">
-                  {next.materia} · {next.horaInicio} &ndash; {next.horaFin}
+                  {next.subject} · {next.startTime} &ndash; {next.endTime}
                 </p>
               </div>
             )}
@@ -116,10 +116,10 @@ export function LabStatusCard({ lab }) {
                 <p className="text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
                   Próxima sesión
                 </p>
-                <p className="text-sm font-medium text-[#1F2937]">{next.materia}</p>
-                <p className="text-[13px] text-[#374151]">{next.docente}</p>
+                <p className="text-sm font-medium text-[#1F2937]">{next.subject}</p>
+                <p className="text-[13px] text-[#374151]">{next.teacher}</p>
                 <p className="text-[13px] text-[#374151]">
-                  {next.horaInicio} &ndash; {next.horaFin}
+                  {next.startTime} &ndash; {next.endTime}
                 </p>
               </div>
             ) : (

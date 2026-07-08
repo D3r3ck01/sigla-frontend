@@ -10,6 +10,8 @@ import {
   Wrench,
   AlertCircle,
   ArrowRight,
+  Filter,
+  X,
 } from "lucide-react"
 import { publicFetch } from "../../lib/publicApi"
 import { useAuth } from "../../context/AuthContext"
@@ -34,6 +36,15 @@ function formatClock(date) {
 
 function hm(date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+}
+
+/* Shared styling for the header filter selects. */
+const filterSelectStyle = {
+  backgroundColor: "rgba(255,255,255,.15)",
+  color: "#fff",
+  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+  fontSize: "13px",
+  maxWidth: "220px",
 }
 
 /* ── KPI card ─────────────────────────────────────────────────────────── */
@@ -73,8 +84,16 @@ export function PublicStatusPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const [labs, setLabs] = useState([])
+  const [allLabs, setAllLabs] = useState([])
   const [sessions, setSessions] = useState([])
+  const [allSubjects, setAllSubjects] = useState([])
+  const [faculties, setFaculties] = useState([])
+  const [programs, setPrograms] = useState([])
+
+  const [facultyId, setFacultyId] = useState("")
+  const [programId, setProgramId] = useState("")
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [now, setNow] = useState(() => new Date())
@@ -91,7 +110,7 @@ export function PublicStatusPage() {
         publicFetch("/public/laboratories/status"),
         publicFetch("/public/sessions/today"),
       ])
-      setLabs(Array.isArray(labsData) ? labsData : [])
+      setAllLabs(Array.isArray(labsData) ? labsData : [])
       setSessions(Array.isArray(sessionsData) ? sessionsData : [])
       setError(false)
       const stamp = new Date()
@@ -106,6 +125,28 @@ export function PublicStatusPage() {
       setTimeout(() => setSpinning(false), 1000)
     }
   }
+
+  // Load filter catalogs once (public, no auth in demo mode).
+  useEffect(() => {
+    publicFetch("/faculties")
+      .then((d) => setFaculties(Array.isArray(d) ? d : []))
+      .catch(() => setFaculties([]))
+    publicFetch("/subjects")
+      .then((d) => setAllSubjects(Array.isArray(d) ? d : []))
+      .catch(() => setAllSubjects([]))
+  }, [])
+
+  // Cascading academic programs when a faculty is selected.
+  useEffect(() => {
+    if (!facultyId) {
+      setPrograms([])
+      setProgramId("")
+      return
+    }
+    publicFetch(`/faculties/${facultyId}/academic-programs`)
+      .then((d) => setPrograms(Array.isArray(d) ? d : []))
+      .catch(() => setPrograms([]))
+  }, [facultyId])
 
   // Initial load + 60s auto-refresh.
   useEffect(() => {
@@ -127,15 +168,104 @@ export function PublicStatusPage() {
     }
   }, [])
 
+  // Map lab id → faculty id (from the full, unfiltered lab list).
+  const labFacultyMap = useMemo(() => {
+    const map = new Map()
+    for (const lab of allLabs) map.set(lab.id, lab.facultyId)
+    return map
+  }, [allLabs])
+
+  // Map subject id → academic program id.
+  const subjectProgramMap = useMemo(() => {
+    const map = new Map()
+    for (const s of allSubjects) map.set(s.id, s.academicProgramId)
+    return map
+  }, [allSubjects])
+
+  // Labs filtered by faculty (academic program does not affect lab cards / KPIs).
+  const filteredLabs = useMemo(() => {
+    if (!facultyId) return allLabs
+    return allLabs.filter((l) => String(l.facultyId) === String(facultyId))
+  }, [allLabs, facultyId])
+
+  // Sessions filtered by faculty (via lab) and academic program (via subject).
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((s) => {
+      if (facultyId && String(labFacultyMap.get(s.laboratoryId)) !== String(facultyId)) return false
+      if (programId && String(subjectProgramMap.get(s.subjectId)) !== String(programId)) return false
+      return true
+    })
+  }, [sessions, facultyId, programId, labFacultyMap, subjectProgramMap])
+
   const kpis = useMemo(() => {
-    const total = labs.length
-    const disponibles = labs.filter((l) => l.estado === "ACTIVO" && !l.sesionActual).length
-    const ocupados = labs.filter((l) => Boolean(l.sesionActual)).length
-    const mantenimiento = labs.filter((l) => l.estado === "EN_MANTENIMIENTO").length
-    return { total, disponibles, ocupados, mantenimiento }
-  }, [labs])
+    const total = filteredLabs.length
+    const available = filteredLabs.filter((l) => l.status === "ACTIVE" && !l.currentSession).length
+    const occupied = filteredLabs.filter((l) => Boolean(l.currentSession)).length
+    const maintenance = filteredLabs.filter((l) => l.status === "UNDER_MAINTENANCE").length
+    return { total, available, occupied, maintenance }
+  }, [filteredLabs])
 
   const countdown = Math.max(0, Math.ceil((REFRESH_MS - secondsAgo * 1000) / 1000))
+
+  const selectedFaculty = faculties.find((f) => String(f.id) === String(facultyId))
+  const selectedProgram = programs.find((p) => String(p.id) === String(programId))
+  const hasActiveFilter = Boolean(facultyId)
+
+  function clearFilters() {
+    setFacultyId("")
+    setProgramId("")
+    setMobileFiltersOpen(false)
+  }
+
+  /* Faculty + program selects, reused on desktop header and mobile drawer.
+     Rendered via a plain function (not a nested component) to avoid remounting
+     the selects on every parent render. */
+  function renderFilterControls(variant = "header") {
+    const isHeader = variant === "header"
+    const selectClass = isHeader
+      ? "h-9 rounded-lg border-0 px-3 outline-none focus:ring-2 focus:ring-white/40"
+      : "h-11 w-full rounded-lg border border-[#DBEAFE] bg-white px-3 text-sm text-[#003B7A] outline-none focus:ring-2 focus:ring-[#003B7A]/30"
+    return (
+      <>
+        <select
+          aria-label="Filtrar por facultad"
+          value={facultyId}
+          onChange={(e) => {
+            setFacultyId(e.target.value)
+            setProgramId("")
+          }}
+          className={selectClass}
+          style={isHeader ? filterSelectStyle : undefined}
+        >
+          <option value="" style={{ color: "#000" }}>
+            Todas las facultades
+          </option>
+          {faculties.map((f) => (
+            <option key={f.id} value={f.id} style={{ color: "#000" }}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrar por carrera"
+          value={programId}
+          onChange={(e) => setProgramId(e.target.value)}
+          disabled={!facultyId}
+          className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-50`}
+          style={isHeader ? filterSelectStyle : undefined}
+        >
+          <option value="" style={{ color: "#000" }}>
+            Todas las carreras
+          </option>
+          {programs.map((p) => (
+            <option key={p.id} value={p.id} style={{ color: "#000" }}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </>
+    )
+  }
 
   return (
     <div className="flex min-h-full flex-col bg-[#F8FAFC]">
@@ -153,11 +283,26 @@ export function PublicStatusPage() {
             </div>
           </div>
 
-          {/* Center (desktop) */}
-          <p className="hidden text-sm text-white md:block">{formatFullDate(now)}</p>
+          {/* Center: filters (desktop only) */}
+          <div className="hidden flex-1 items-center justify-center gap-2 lg:flex">
+            {renderFilterControls("header")}
+          </div>
 
           {/* Right */}
           <div className="flex items-center gap-3">
+            {/* Mobile filter trigger */}
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className="relative inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium text-white lg:hidden"
+            >
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Filtros</span>
+              {hasActiveFilter && (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#C8102E]" />
+              )}
+            </button>
+
             <div className="text-right leading-tight">
               <p className="font-mono text-base font-bold tabular-nums">{formatClock(now)}</p>
               <p className="flex items-center justify-end gap-1 text-xs text-white/70">
@@ -180,13 +325,82 @@ export function PublicStatusPage() {
         </div>
       </header>
 
+      {/* Active filter banner */}
+      {hasActiveFilter && (
+        <div className="border-b border-[#DBEAFE] bg-[#EFF6FF]">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-2.5 text-sm text-[#003B7A] md:px-6">
+            <span className="font-medium">Mostrando resultados para:</span>
+            <span className="inline-flex items-center rounded-full bg-[#003B7A]/10 px-2.5 py-0.5 font-semibold">
+              {selectedFaculty?.name || "Facultad"}
+            </span>
+            {selectedProgram && (
+              <>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="inline-flex items-center rounded-full bg-[#003B7A]/10 px-2.5 py-0.5 font-semibold">
+                  {selectedProgram.name}
+                </span>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#003B7A]/20 px-2.5 py-1 text-xs font-medium hover:bg-[#003B7A]/5"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              Limpiar filtros
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile filter drawer */}
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMobileFiltersOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 top-0 flex h-full w-4/5 max-w-xs flex-col gap-4 bg-white p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-[#003B7A]">Filtros</h2>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="rounded-lg p-1.5 text-[#6B7280] hover:bg-[#F1F5F9]"
+                aria-label="Cerrar filtros"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[#6B7280]">Facultad</label>
+              {renderFilterControls("drawer")}
+            </div>
+            {hasActiveFilter && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-auto inline-flex items-center justify-center gap-1 rounded-lg border border-[#003B7A]/20 px-3 py-2 text-sm font-medium text-[#003B7A] hover:bg-[#003B7A]/5"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6">
+        {/* Date */}
+        <p className="mb-4 text-sm text-[#6B7280] md:hidden">{formatFullDate(now)}</p>
+
         {/* Active session banner */}
         {user && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#003B7A]/20 bg-[#003B7A]/5 px-4 py-3">
             <p className="text-sm text-[#1F2937]">
               Tienes una sesión activa como{" "}
-              <span className="font-semibold">{user.rol || "Administrador"}</span>
+              <span className="font-semibold">{user.role || user.rol || "Administrador"}</span>
             </p>
             <button
               type="button"
@@ -213,14 +427,14 @@ export function PublicStatusPage() {
           <KpiCard icon={Building2} value={kpis.total} label="Total laboratorios" topColor="#003B7A" />
           <KpiCard
             icon={CheckCircle}
-            value={kpis.disponibles}
+            value={kpis.available}
             label="Disponibles ahora"
             topColor="#16A34A"
           />
-          <KpiCard icon={Users} value={kpis.ocupados} label="Ocupados ahora" topColor="#D97706" />
+          <KpiCard icon={Users} value={kpis.occupied} label="Ocupados ahora" topColor="#D97706" />
           <KpiCard
             icon={Wrench}
-            value={kpis.mantenimiento}
+            value={kpis.maintenance}
             label="En mantenimiento"
             topColor="#C8102E"
           />
@@ -243,14 +457,18 @@ export function PublicStatusPage() {
                 <LabCardSkeleton key={i} />
               ))}
             </div>
-          ) : labs.length === 0 ? (
+          ) : filteredLabs.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl bg-white py-16 text-center shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
               <FlaskConical className="h-12 w-12 text-[#6B7280]" aria-hidden="true" />
-              <p className="text-[#6B7280]">No hay laboratorios registrados en el sistema.</p>
+              <p className="text-[#6B7280]">
+                {hasActiveFilter
+                  ? "No hay laboratorios registrados para esta facultad."
+                  : "No hay laboratorios registrados en el sistema."}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {labs.map((lab) => (
+              {filteredLabs.map((lab) => (
                 <LabStatusCard key={lab.id} lab={lab} />
               ))}
             </div>
@@ -265,7 +483,7 @@ export function PublicStatusPage() {
           {loading ? (
             <div className="h-40 animate-pulse rounded-xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)]" />
           ) : (
-            <TodayScheduleTable sessions={sessions} nowHM={hm(now)} />
+            <TodayScheduleTable sessions={filteredSessions} nowHM={hm(now)} />
           )}
         </section>
       </main>

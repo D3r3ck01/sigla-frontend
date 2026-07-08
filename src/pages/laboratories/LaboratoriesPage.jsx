@@ -14,24 +14,29 @@ import { ConfirmDialog } from "../../components/ConfirmDialog"
 import { Field, Input, Select } from "../../components/Field"
 
 const TYPES = [
-  { value: "COMPUTO", label: "Cómputo" },
-  { value: "REDES", label: "Redes" },
+  { value: "COMPUTING", label: "Cómputo" },
+  { value: "NETWORKS", label: "Redes" },
   { value: "INDUSTRIAL", label: "Industrial" },
-  { value: "TEORICO", label: "Teórico" },
+  { value: "THEORETICAL", label: "Teórico" },
+  { value: "OTHER", label: "Otro" },
 ]
 
 const STATES = [
-  { value: "ACTIVO", label: "Activo" },
-  { value: "EN_MANTENIMIENTO", label: "En mantenimiento" },
-  { value: "CERRADO", label: "Cerrado" },
+  { value: "ACTIVE", label: "Activo" },
+  { value: "UNDER_MAINTENANCE", label: "En mantenimiento" },
+  { value: "CLOSED", label: "Cerrado" },
 ]
 
-const empty = { codigo: "", nombre: "", tipo: "COMPUTO", capacidadMaxima: "", estado: "ACTIVO" }
+const empty = { code: "", name: "", type: "COMPUTING", capacity: "", status: "ACTIVE", facultyId: "" }
 
 export function LaboratoriesPage() {
   const toast = useToast()
   const { data, loading, refetch } = useAsync(() => api.get("/laboratories"), [])
   const labs = asList(data)
+
+  const { data: facultiesData } = useAsync(() => api.get("/faculties"), [])
+  const faculties = asList(facultiesData)
+  const facultyName = (id) => faculties.find((f) => f.id === id)?.name || "—"
 
   const [typeFilter, setTypeFilter] = useState("")
   const [stateFilter, setStateFilter] = useState("")
@@ -46,11 +51,11 @@ export function LaboratoriesPage() {
 
   const filtered = useMemo(() => {
     return labs.filter((l) => {
-      if (typeFilter && l.tipo !== typeFilter) return false
-      if (stateFilter && l.estado !== stateFilter) return false
+      if (typeFilter && l.type !== typeFilter) return false
+      if (stateFilter && l.status !== stateFilter) return false
       if (search) {
         const q = search.toLowerCase()
-        if (!`${l.nombre || ""} ${l.codigo || ""}`.toLowerCase().includes(q)) return false
+        if (!`${l.name || ""} ${l.code || ""}`.toLowerCase().includes(q)) return false
       }
       return true
     })
@@ -65,11 +70,12 @@ export function LaboratoriesPage() {
   function openEdit(l) {
     setEditing(l)
     setForm({
-      codigo: l.codigo || "",
-      nombre: l.nombre || "",
-      tipo: l.tipo || "COMPUTO",
-      capacidadMaxima: l.capacidadMaxima ?? "",
-      estado: l.estado || "ACTIVO",
+      code: l.code || "",
+      name: l.name || "",
+      type: l.type || "COMPUTING",
+      capacity: l.capacity ?? "",
+      status: l.status || "ACTIVE",
+      facultyId: l.facultyId || "",
     })
     setModalOpen(true)
   }
@@ -81,7 +87,7 @@ export function LaboratoriesPage() {
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
-    const payload = { ...form, capacidadMaxima: Number(form.capacidadMaxima) || 0 }
+    const payload = { ...form, capacity: Number(form.capacity) || 0 }
     try {
       if (editing) {
         await api.put(`/laboratories/${editing.id}`, payload)
@@ -114,11 +120,12 @@ export function LaboratoriesPage() {
   }
 
   const columns = [
-    { key: "codigo", header: "Código", render: (r) => <span className="font-mono text-xs font-medium">{r.codigo}</span> },
-    { key: "nombre", header: "Nombre", render: (r) => <span className="font-medium">{r.nombre}</span> },
-    { key: "tipo", header: "Tipo", render: (r) => <StatusBadge value={r.tipo} /> },
-    { key: "capacidadMaxima", header: "Capacidad", align: "center", render: (r) => r.capacidadMaxima },
-    { key: "estado", header: "Estado", render: (r) => <StatusBadge value={r.estado} /> },
+    { key: "code", header: "Código", render: (r) => <span className="font-mono text-xs font-medium">{r.code}</span> },
+    { key: "name", header: "Nombre", render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: "faculty", header: "Facultad", render: (r) => facultyName(r.facultyId) },
+    { key: "type", header: "Tipo", render: (r) => <StatusBadge value={r.type} /> },
+    { key: "capacity", header: "Capacidad", align: "center", render: (r) => r.capacity },
+    { key: "status", header: "Estado", render: (r) => <StatusBadge value={r.status} /> },
     {
       key: "actions",
       header: "",
@@ -193,18 +200,28 @@ export function LaboratoriesPage() {
         <form id="lab-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Código" required>
-              <Input required placeholder="Ej. LAB-101" value={form.codigo} onChange={(e) => set("codigo", e.target.value)} />
+              <Input required placeholder="Ej. LAB-101" value={form.code} onChange={(e) => set("code", e.target.value)} />
             </Field>
             <Field label="Capacidad máxima" required>
-              <Input type="number" min="0" required value={form.capacidadMaxima} onChange={(e) => set("capacidadMaxima", e.target.value)} />
+              <Input type="number" min="0" required value={form.capacity} onChange={(e) => set("capacity", e.target.value)} />
             </Field>
           </div>
           <Field label="Nombre" required>
-            <Input required placeholder="Ej. Laboratorio de Cómputo 1" value={form.nombre} onChange={(e) => set("nombre", e.target.value)} />
+            <Input required placeholder="Ej. Laboratorio de Cómputo 1" value={form.name} onChange={(e) => set("name", e.target.value)} />
+          </Field>
+          <Field label="Facultad" required>
+            <Select required value={form.facultyId} onChange={(e) => set("facultyId", e.target.value)}>
+              <option value="">Selecciona una facultad…</option>
+              {faculties.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Tipo" required>
-              <Select value={form.tipo} onChange={(e) => set("tipo", e.target.value)}>
+              <Select value={form.type} onChange={(e) => set("type", e.target.value)}>
                 {TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
@@ -213,7 +230,7 @@ export function LaboratoriesPage() {
               </Select>
             </Field>
             <Field label="Estado" required>
-              <Select value={form.estado} onChange={(e) => set("estado", e.target.value)}>
+              <Select value={form.status} onChange={(e) => set("status", e.target.value)}>
                 {STATES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -231,7 +248,7 @@ export function LaboratoriesPage() {
         onConfirm={handleDelete}
         loading={deleting}
         title="Eliminar laboratorio"
-        message={`¿Seguro que deseas eliminar "${toDelete?.nombre}"? Esta acción no se puede deshacer.`}
+        message={`¿Seguro que deseas eliminar "${toDelete?.name}"? Esta acción no se puede deshacer.`}
       />
     </div>
   )
