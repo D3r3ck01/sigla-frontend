@@ -3,30 +3,31 @@ import { useAsync, asList } from "../../lib/useAsync"
 import { CrudTab } from "./CrudTab"
 
 export function CareersTab() {
-  const { data } = useAsync(() => api.get("/academic/faculties"), [])
+  const { data } = useAsync(() => api.get("/faculties"), [])
   const faculties = asList(data)
-  const facultyName = (id) => faculties.find((f) => f.id === id)?.nombre || "—"
+  const facultyName = (id) => faculties.find((f) => f.id === id)?.name || "—"
 
   return (
     <CrudTab
       title="Carreras"
       entityLabel="Carrera"
-      endpoint="/academic/careers"
-      emptyForm={{ nombre: "", facultadId: "" }}
-      toForm={(r) => ({ nombre: r.nombre || "", facultadId: r.facultadId || "" })}
+      endpoint="/academic-programs"
+      emptyForm={{ name: "", facultyId: "" }}
+      toForm={(r) => ({ name: r.name || "", facultyId: r.facultyId || "" })}
+      getName={(r) => r.name}
       fields={[
-        { name: "nombre", label: "Nombre", required: true, placeholder: "Ej. Ingeniería en Sistemas" },
+        { name: "name", label: "Nombre", required: true, placeholder: "Ej. Ingeniería en Sistemas" },
         {
-          name: "facultadId",
+          name: "facultyId",
           label: "Facultad",
           type: "select",
           required: true,
-          options: faculties.map((f) => ({ value: f.id, label: f.nombre })),
+          options: faculties.map((f) => ({ value: f.id, label: f.name })),
         },
       ]}
       columns={[
-        { key: "nombre", header: "Nombre", render: (r) => <span className="font-medium">{r.nombre}</span> },
-        { key: "facultad", header: "Facultad", render: (r) => facultyName(r.facultadId) },
+        { key: "name", header: "Nombre", render: (r) => <span className="font-medium">{r.name}</span> },
+        { key: "faculty", header: "Facultad", render: (r) => facultyName(r.facultyId) },
       ]}
     />
   )

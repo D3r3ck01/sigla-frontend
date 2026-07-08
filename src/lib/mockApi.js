@@ -3,18 +3,18 @@
  *  MOCK BACKEND (DEMO MODE)
  * ──────────────────────────────────────────────────────────────────────────
  *  This module simulates the REST API in-memory so the entire application can
- *  be tested without a running backend. It mirrors the same endpoints, request
- *  shapes and response shapes the real Spring backend is expected to expose.
+ *  be tested without a running backend. It mirrors the REAL backend contract:
+ *  English field names, English enum values and the documented routes.
  *
  *  Data is seeded with realistic Universidad Central del Ecuador (UCE) content
  *  and persisted to localStorage so changes survive page refreshes.
  *
- *  ➜ To switch to the REAL backend: set USE_MOCK = false in src/lib/api.js
+ *  ➜ To switch to the REAL backend: set VITE_USE_MOCK="false".
  *  ➜ To reset demo data: run  window.__siglaResetMock()  in the browser console
  */
 
 const DB_KEY = "sigla_mock_db"
-const DB_VERSION = 2 // bump to force a reseed when the seed shape changes
+const DB_VERSION = 3 // bump to force a reseed when the seed shape changes
 
 // ── date helpers ───────────────────────────────────────────────────────────
 function todayISO() {
@@ -29,79 +29,95 @@ function nowHM() {
   const d = new Date()
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
 }
+function nowISO() {
+  return new Date().toISOString()
+}
 // Deterministic pseudo attendance so the public view is stable across refreshes.
-function pseudoStudents(seedNum, capacidad) {
-  const pct = 0.45 + ((Number(seedNum) * 17) % 50) / 100 // 0.45–0.95
-  return Math.min(capacidad, Math.max(1, Math.round(capacidad * pct)))
+function pseudoStudents(seed, capacity, registered) {
+  const cap = Number(registered || capacity) || 0
+  const n = String(seed)
+    .split("")
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+  const pct = 0.45 + ((n * 17) % 50) / 100 // 0.45–0.95
+  return Math.min(cap, Math.max(1, Math.round(cap * pct)))
 }
 
-const DAY_NUM = { LUNES: 1, MARTES: 2, MIERCOLES: 3, JUEVES: 4, VIERNES: 5, SABADO: 6, DOMINGO: 0 }
+// English weekday → JS getDay() index.
+const DAY_NUM = {
+  SUNDAY: 0,
+  MONDAY: 1,
+  TUESDAY: 2,
+  WEDNESDAY: 3,
+  THURSDAY: 4,
+  FRIDAY: 5,
+  SATURDAY: 6,
+}
 
 // ── seed data (UCE) ──────────────────────────────────────────────────────────
 function seed() {
+  const ts = nowISO()
+  const stamp = { createdAt: ts, updatedAt: ts }
   return {
     _v: DB_VERSION,
     faculties: [
-      { id: 1, nombre: "Facultad de Ingeniería y Ciencias Aplicadas" },
-      { id: 2, nombre: "Facultad de Ciencias Médicas" },
-      { id: 3, nombre: "Facultad de Ciencias Económicas" },
+      { id: "fac-1", name: "Faculty of Engineering and Applied Sciences", ...stamp },
+      { id: "fac-2", name: "Faculty of Medical Sciences", ...stamp },
     ],
-    careers: [
-      { id: 1, nombre: "Ingeniería en Sistemas de Información", facultadId: 1 },
-      { id: 2, nombre: "Ingeniería en Computación", facultadId: 1 },
-      { id: 3, nombre: "Medicina", facultadId: 2 },
-      { id: 4, nombre: "Economía", facultadId: 3 },
+    academicPrograms: [
+      { id: "prog-1", facultyId: "fac-1", name: "Information Systems Engineering", ...stamp },
+      { id: "prog-2", facultyId: "fac-1", name: "Computer Engineering", ...stamp },
+      { id: "prog-3", facultyId: "fac-2", name: "Medicine", ...stamp },
     ],
     subjects: [
-      { id: 1, nombre: "Programación I", carreraId: 1 },
-      { id: 2, nombre: "Estructura de Datos", carreraId: 1 },
-      { id: 3, nombre: "Bases de Datos", carreraId: 1 },
-      { id: 4, nombre: "Redes de Computadores", carreraId: 2 },
-      { id: 5, nombre: "Sistemas Operativos", carreraId: 2 },
-      { id: 6, nombre: "Anatomía Humana", carreraId: 3 },
-      { id: 7, nombre: "Microeconomía", carreraId: 4 },
+      { id: "subj-1", academicProgramId: "prog-1", name: "Programming I", semester: 1, ...stamp },
+      { id: "subj-2", academicProgramId: "prog-1", name: "Data Structures", semester: 2, ...stamp },
+      { id: "subj-3", academicProgramId: "prog-1", name: "Databases", semester: 3, ...stamp },
+      { id: "subj-4", academicProgramId: "prog-2", name: "Computer Networks", semester: 4, ...stamp },
+      { id: "subj-5", academicProgramId: "prog-2", name: "Operating Systems", semester: 5, ...stamp },
+      { id: "subj-6", academicProgramId: "prog-3", name: "Human Anatomy", semester: 1, ...stamp },
     ],
-    teachers: [
-      { id: 1, nombre: "Ing. Carlos Vásquez", correo: "cvasquez@uce.edu.ec", materiasAsignadas: [1, 2] },
-      { id: 2, nombre: "Ing. María Jaramillo", correo: "mjaramillo@uce.edu.ec", materiasAsignadas: [3, 4] },
-      { id: 3, nombre: "Ing. Luis Andrade", correo: "landrade@uce.edu.ec", materiasAsignadas: [5] },
-      { id: 4, nombre: "Dra. Ana Torres", correo: "atorres@uce.edu.ec", materiasAsignadas: [6] },
+    users: [
+      { id: "user-admin", firstName: "System", lastName: "Administrator", email: "admin@uce.edu.ec", role: "ADMIN", enabled: true, ...stamp },
+      { id: "user-1", firstName: "Carlos", lastName: "Vásquez", email: "cvasquez@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
+      { id: "user-2", firstName: "María", lastName: "Jaramillo", email: "mjaramillo@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
+      { id: "user-3", firstName: "Luis", lastName: "Andrade", email: "landrade@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
+      { id: "user-4", firstName: "Ana", lastName: "Torres", email: "atorres@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
     ],
-    teacherSubjects: [
-      { id: 1, teacherId: 1, subjectId: 1 },
-      { id: 2, teacherId: 1, subjectId: 2 },
-      { id: 3, teacherId: 2, subjectId: 3 },
-      { id: 4, teacherId: 2, subjectId: 4 },
-      { id: 5, teacherId: 3, subjectId: 5 },
-      { id: 6, teacherId: 4, subjectId: 6 },
+    teacherSubjectAssignments: [
+      { id: "tsa-1", teacherId: "user-1", subjectId: "subj-1", status: "ACTIVE", ...stamp },
+      { id: "tsa-2", teacherId: "user-1", subjectId: "subj-2", status: "ACTIVE", ...stamp },
+      { id: "tsa-3", teacherId: "user-2", subjectId: "subj-3", status: "ACTIVE", ...stamp },
+      { id: "tsa-4", teacherId: "user-2", subjectId: "subj-4", status: "ACTIVE", ...stamp },
+      { id: "tsa-5", teacherId: "user-3", subjectId: "subj-5", status: "ACTIVE", ...stamp },
+      { id: "tsa-6", teacherId: "user-4", subjectId: "subj-6", status: "ACTIVE", ...stamp },
     ],
-    periods: [
-      { id: 1, nombre: "2024-II", fechaInicio: "2024-10-01", fechaFin: "2025-02-28", estado: "CERRADO" },
-      { id: 2, nombre: "2025-I", fechaInicio: "2025-04-01", fechaFin: "2025-08-31", estado: "ACTIVO" },
+    academicPeriods: [
+      { id: "period-1", name: "2024-II", startDate: "2024-10-01", endDate: "2025-02-28", status: "CLOSED", ...stamp },
+      { id: "period-2", name: "2025-I", startDate: "2025-04-01", endDate: "2025-08-31", status: "ACTIVE", ...stamp },
     ],
     laboratories: [
-      { id: 1, codigo: "LAB-101", nombre: "Laboratorio de Cómputo 1", tipo: "COMPUTO", capacidadMaxima: 30, estado: "ACTIVO" },
-      { id: 2, codigo: "LAB-102", nombre: "Laboratorio de Cómputo 2", tipo: "COMPUTO", capacidadMaxima: 25, estado: "ACTIVO" },
-      { id: 3, codigo: "LAB-201", nombre: "Laboratorio de Redes", tipo: "REDES", capacidadMaxima: 20, estado: "ACTIVO" },
-      { id: 4, codigo: "LAB-202", nombre: "Laboratorio Industrial", tipo: "INDUSTRIAL", capacidadMaxima: 18, estado: "EN_MANTENIMIENTO" },
-      { id: 5, codigo: "AULA-301", nombre: "Aula Teórica 1", tipo: "TEORICO", capacidadMaxima: 40, estado: "ACTIVO" },
-      { id: 6, codigo: "LAB-103", nombre: "Laboratorio de Cómputo 3", tipo: "COMPUTO", capacidadMaxima: 28, estado: "CERRADO" },
+      { id: "lab-1", facultyId: "fac-1", code: "LAB-101", name: "Computer Lab 1", type: "COMPUTING", capacity: 30, status: "ACTIVE", ...stamp },
+      { id: "lab-2", facultyId: "fac-1", code: "LAB-102", name: "Computer Lab 2", type: "COMPUTING", capacity: 25, status: "ACTIVE", ...stamp },
+      { id: "lab-3", facultyId: "fac-1", code: "LAB-201", name: "Networking Lab", type: "NETWORKS", capacity: 20, status: "ACTIVE", ...stamp },
+      { id: "lab-4", facultyId: "fac-1", code: "LAB-202", name: "Industrial Lab", type: "INDUSTRIAL", capacity: 18, status: "UNDER_MAINTENANCE", ...stamp },
+      { id: "lab-5", facultyId: "fac-2", code: "CLASS-301", name: "Theory Classroom 1", type: "THEORETICAL", capacity: 40, status: "ACTIVE", ...stamp },
+      { id: "lab-6", facultyId: "fac-1", code: "LAB-103", name: "Computer Lab 3", type: "COMPUTING", capacity: 28, status: "CLOSED", ...stamp },
     ],
     baseSchedules: [
-      { id: 1, periodoId: 2, laboratorioId: 1, docenteId: 1, materiaId: 1, diaSemana: "LUNES", horaInicio: "08:00:00", horaFin: "10:00:00" },
-      { id: 2, periodoId: 2, laboratorioId: 2, docenteId: 1, materiaId: 2, diaSemana: "LUNES", horaInicio: "10:00:00", horaFin: "12:00:00" },
-      { id: 3, periodoId: 2, laboratorioId: 3, docenteId: 2, materiaId: 4, diaSemana: "MARTES", horaInicio: "09:00:00", horaFin: "11:00:00" },
-      { id: 4, periodoId: 2, laboratorioId: 1, docenteId: 2, materiaId: 3, diaSemana: "MIERCOLES", horaInicio: "14:00:00", horaFin: "16:00:00" },
-      { id: 5, periodoId: 2, laboratorioId: 2, docenteId: 3, materiaId: 5, diaSemana: "JUEVES", horaInicio: "08:00:00", horaFin: "10:00:00" },
-      { id: 6, periodoId: 2, laboratorioId: 3, docenteId: 1, materiaId: 1, diaSemana: "VIERNES", horaInicio: "11:00:00", horaFin: "13:00:00" },
+      { id: "bs-1", academicPeriodId: "period-2", laboratoryId: "lab-1", teacherId: "user-1", subjectId: "subj-1", weekDay: "MONDAY", startTime: "08:00:00", endTime: "10:00:00", registeredStudentCount: 30, ...stamp },
+      { id: "bs-2", academicPeriodId: "period-2", laboratoryId: "lab-2", teacherId: "user-1", subjectId: "subj-2", weekDay: "MONDAY", startTime: "10:00:00", endTime: "12:00:00", registeredStudentCount: 25, ...stamp },
+      { id: "bs-3", academicPeriodId: "period-2", laboratoryId: "lab-3", teacherId: "user-2", subjectId: "subj-4", weekDay: "TUESDAY", startTime: "09:00:00", endTime: "11:00:00", registeredStudentCount: 20, ...stamp },
+      { id: "bs-4", academicPeriodId: "period-2", laboratoryId: "lab-1", teacherId: "user-2", subjectId: "subj-3", weekDay: "WEDNESDAY", startTime: "14:00:00", endTime: "16:00:00", registeredStudentCount: 28, ...stamp },
+      { id: "bs-5", academicPeriodId: "period-2", laboratoryId: "lab-2", teacherId: "user-3", subjectId: "subj-5", weekDay: "THURSDAY", startTime: "08:00:00", endTime: "10:00:00", registeredStudentCount: 24, ...stamp },
+      { id: "bs-6", academicPeriodId: "period-2", laboratoryId: "lab-3", teacherId: "user-1", subjectId: "subj-1", weekDay: "FRIDAY", startTime: "11:00:00", endTime: "13:00:00", registeredStudentCount: 20, ...stamp },
     ],
     sessions: [
-      { id: 1, periodoId: 2, fecha: todayISO(), horaInicio: "08:00:00", horaFin: "10:00:00", materiaId: 1, laboratorioId: 1, docenteId: 1, estado: "FINALIZADA", asistenciaDocente: "LLEGO" },
-      { id: 2, periodoId: 2, fecha: todayISO(), horaInicio: "10:00:00", horaFin: "12:00:00", materiaId: 4, laboratorioId: 3, docenteId: 2, estado: "EN_CURSO", asistenciaDocente: null },
-      { id: 3, periodoId: 2, fecha: todayISO(), horaInicio: "14:00:00", horaFin: "16:00:00", materiaId: 3, laboratorioId: 1, docenteId: 2, estado: "PROGRAMADA", asistenciaDocente: null },
-      { id: 4, periodoId: 2, fecha: shiftISO(1), horaInicio: "08:00:00", horaFin: "10:00:00", materiaId: 2, laboratorioId: 2, docenteId: 1, estado: "PROGRAMADA", asistenciaDocente: null },
-      { id: 5, periodoId: 2, fecha: shiftISO(1), horaInicio: "09:00:00", horaFin: "11:00:00", materiaId: 5, laboratorioId: 2, docenteId: 3, estado: "PROGRAMADA", asistenciaDocente: null },
-      { id: 6, periodoId: 2, fecha: shiftISO(-1), horaInicio: "11:00:00", horaFin: "13:00:00", materiaId: 1, laboratorioId: 3, docenteId: 1, estado: "FINALIZADA", asistenciaDocente: "RETRASO" },
+      { id: "ses-1", baseScheduleId: "bs-1", academicPeriodId: "period-2", teacherId: "user-1", subjectId: "subj-1", laboratoryId: "lab-1", date: todayISO(), startTime: "08:00:00", endTime: "10:00:00", registeredStudentCount: 30, attendedStudentCount: 28, status: "FINISHED", teacherAttendance: "ARRIVED", ...stamp },
+      { id: "ses-2", baseScheduleId: "bs-3", academicPeriodId: "period-2", teacherId: "user-2", subjectId: "subj-4", laboratoryId: "lab-3", date: todayISO(), startTime: "10:00:00", endTime: "12:00:00", registeredStudentCount: 20, attendedStudentCount: 17, status: "IN_PROGRESS", teacherAttendance: "NOT_RECORDED", ...stamp },
+      { id: "ses-3", baseScheduleId: "bs-4", academicPeriodId: "period-2", teacherId: "user-2", subjectId: "subj-3", laboratoryId: "lab-1", date: todayISO(), startTime: "14:00:00", endTime: "16:00:00", registeredStudentCount: 28, attendedStudentCount: 0, status: "SCHEDULED", teacherAttendance: "NOT_RECORDED", ...stamp },
+      { id: "ses-4", baseScheduleId: null, academicPeriodId: "period-2", teacherId: "user-4", subjectId: "subj-6", laboratoryId: "lab-5", date: todayISO(), startTime: "11:00:00", endTime: "13:00:00", registeredStudentCount: 35, attendedStudentCount: 0, status: "SCHEDULED", teacherAttendance: "NOT_RECORDED", ...stamp },
+      { id: "ses-5", baseScheduleId: "bs-2", academicPeriodId: "period-2", teacherId: "user-1", subjectId: "subj-2", laboratoryId: "lab-2", date: shiftISO(1), startTime: "10:00:00", endTime: "12:00:00", registeredStudentCount: 25, attendedStudentCount: 0, status: "SCHEDULED", teacherAttendance: "NOT_RECORDED", ...stamp },
+      { id: "ses-6", baseScheduleId: "bs-6", academicPeriodId: "period-2", teacherId: "user-1", subjectId: "subj-1", laboratoryId: "lab-3", date: shiftISO(-1), startTime: "11:00:00", endTime: "13:00:00", registeredStudentCount: 20, attendedStudentCount: 15, status: "FINISHED", teacherAttendance: "LATE", ...stamp },
     ],
   }
 }
@@ -144,154 +160,295 @@ if (typeof window !== "undefined") {
 // ── small utilities ──────────────────────────────────────────────────────────
 const delay = (ms = 160) => new Promise((r) => setTimeout(r, ms))
 const eqId = (a, b) => String(a) === String(b)
-const nextId = (list) => (list.length ? Math.max(...list.map((x) => Number(x.id) || 0)) + 1 : 1)
-const numOrSelf = (v) => (v !== "" && v != null && !Number.isNaN(Number(v)) ? Number(v) : v)
+let _seq = Date.now()
+function uid(prefix) {
+  _seq += 1
+  return `${prefix}-${_seq.toString(36)}`
+}
+
+function badRequest(message, details) {
+  const err = new Error(message || "Bad Request")
+  err.status = 400
+  err.payload = {
+    timestamp: nowISO(),
+    status: 400,
+    error: "Bad Request",
+    message: message || "Bad Request",
+    details: details || [],
+  }
+  throw err
+}
 
 function notFound() {
-  const err = new Error("Recurso no encontrado (mock).")
+  const err = new Error("Resource not found (mock).")
   err.status = 404
+  err.payload = {
+    timestamp: nowISO(),
+    status: 404,
+    error: "Not Found",
+    message: "Resource not found (mock).",
+    details: [],
+  }
   throw err
 }
 
 const labOf = (id) => db.laboratories.find((l) => eqId(l.id, id))
 const subjectOf = (id) => db.subjects.find((s) => eqId(s.id, id))
-const teacherOf = (id) => db.teachers.find((t) => eqId(t.id, id))
+const userOf = (id) => db.users.find((u) => eqId(u.id, id))
+const fullName = (u) => (u ? `${u.firstName} ${u.lastName}`.trim() : undefined)
 
+/** Adds human-readable names used by admin views (English field names). */
 function enrich(record) {
-  const lab = labOf(record.laboratorioId)
-  const mat = subjectOf(record.materiaId)
-  const doc = teacherOf(record.docenteId)
+  const lab = labOf(record.laboratoryId)
+  const subj = subjectOf(record.subjectId)
+  const user = userOf(record.teacherId)
   return {
     ...record,
-    materiaNombre: mat?.nombre,
-    laboratorioNombre: lab?.nombre,
-    laboratorioCodigo: lab?.codigo,
-    docenteNombre: doc?.nombre,
+    subjectName: subj?.name,
+    laboratoryName: lab?.name,
+    laboratoryCode: lab?.code,
+    teacherName: fullName(user),
   }
 }
 
 // Generic CRUD collection handler.
 function crud(collection, method, id, body) {
   const list = db[collection]
-  if (method === "GET") return list
+  if (method === "GET") {
+    if (id == null) return list
+    const found = list.find((x) => eqId(x.id, id))
+    if (!found) notFound()
+    return found
+  }
   if (method === "POST") {
-    const record = { ...body, id: nextId(list) }
+    const record = { ...body, id: uid(collection), createdAt: nowISO(), updatedAt: nowISO() }
     list.push(record)
     return record
   }
   if (method === "PUT" || method === "PATCH") {
     const idx = list.findIndex((x) => eqId(x.id, id))
     if (idx === -1) notFound()
-    list[idx] = { ...list[idx], ...body, id: list[idx].id }
+    list[idx] = { ...list[idx], ...body, id: list[idx].id, updatedAt: nowISO() }
     return list[idx]
   }
   if (method === "DELETE") {
     const idx = list.findIndex((x) => eqId(x.id, id))
     if (idx === -1) notFound()
     list.splice(idx, 1)
-    return null
+    return "Deleted successfully."
   }
   notFound()
 }
 
 // ── router ───────────────────────────────────────────────────────────────────
 function route(method, path, query, body) {
-  // strip a single trailing slash
-  const p = path.replace(/\/$/, "")
+  const p = path.replace(/\/$/, "") // strip a single trailing slash
+  let m
 
   // Auth ----------------------------------------------------------------------
   if (p === "/auth/login" && method === "POST") {
+    const email = body?.email || "admin@uce.edu.ec"
     return {
       accessToken: "mock-token",
-      user: { nombre: "Administrador", apellido: "UCE", email: body?.email || "admin@uce.edu.ec", rol: "Administrador" },
+      user: {
+        id: "user-admin",
+        firstName: "System",
+        lastName: "Administrator",
+        name: "System Administrator",
+        email,
+        role: "ADMIN",
+      },
     }
   }
   if (p === "/auth/logout") return null
 
-  // Academic: periods ---------------------------------------------------------
-  if (p === "/academic/periods") return crud("periods", method, null, body)
-  let m = p.match(/^\/academic\/periods\/(.+)$/)
-  if (m) return crud("periods", method, m[1], body)
-
-  // Academic: faculties -------------------------------------------------------
-  if (p === "/academic/faculties") return crud("faculties", method, null, body)
-  m = p.match(/^\/academic\/faculties\/(.+)$/)
+  // Faculties -----------------------------------------------------------------
+  // Cascading academic programs by faculty (must precede /faculties/{id}).
+  m = p.match(/^\/faculties\/([^/]+)\/academic-programs$/)
+  if (m && method === "GET") {
+    return db.academicPrograms.filter((ap) => eqId(ap.facultyId, m[1]))
+  }
+  if (p === "/faculties") return crud("faculties", method, null, body)
+  m = p.match(/^\/faculties\/(.+)$/)
   if (m) return crud("faculties", method, m[1], body)
 
-  // Academic: careers ---------------------------------------------------------
-  if (p === "/academic/careers") return crud("careers", method, null, body)
-  m = p.match(/^\/academic\/careers\/(.+)$/)
-  if (m) return crud("careers", method, m[1], body)
+  // Academic programs ---------------------------------------------------------
+  if (p === "/academic-programs") return crud("academicPrograms", method, null, body)
+  m = p.match(/^\/academic-programs\/(.+)$/)
+  if (m) return crud("academicPrograms", method, m[1], body)
 
-  // Academic: subjects --------------------------------------------------------
-  if (p === "/academic/subjects") return crud("subjects", method, null, body)
-  m = p.match(/^\/academic\/subjects\/(.+)$/)
+  // Subjects ------------------------------------------------------------------
+  if (p === "/subjects") {
+    if (method === "GET" && query.academicProgramId) {
+      return db.subjects.filter((s) => eqId(s.academicProgramId, query.academicProgramId))
+    }
+    return crud("subjects", method, null, body)
+  }
+  m = p.match(/^\/subjects\/(.+)$/)
   if (m) return crud("subjects", method, m[1], body)
 
-  // Academic: teacher-subjects (assignments) ----------------------------------
-  if (p === "/academic/teacher-subjects") {
-    if (method === "GET") {
-      const tid = query.teacherId
-      return db.teacherSubjects.filter((a) => eqId(a.teacherId, tid))
-    }
-    if (method === "POST") {
-      const teacherId = numOrSelf(body.teacherId)
-      const subjectId = numOrSelf(body.subjectId)
-      const record = { id: nextId(db.teacherSubjects), teacherId, subjectId }
-      db.teacherSubjects.push(record)
-      const teacher = teacherOf(teacherId)
-      if (teacher) {
-        teacher.materiasAsignadas = teacher.materiasAsignadas || []
-        if (!teacher.materiasAsignadas.some((x) => eqId(x, subjectId))) teacher.materiasAsignadas.push(subjectId)
-      }
-      return record
-    }
+  // Academic periods ----------------------------------------------------------
+  if (p === "/academic-periods/active" && method === "GET") {
+    return db.academicPeriods.find((pd) => pd.status === "ACTIVE") || null
   }
-  m = p.match(/^\/academic\/teacher-subjects\/(.+)$/)
-  if (m && method === "DELETE") {
-    const idx = db.teacherSubjects.findIndex((a) => eqId(a.id, m[1]))
-    if (idx === -1) notFound()
-    const removed = db.teacherSubjects.splice(idx, 1)[0]
-    const teacher = teacherOf(removed.teacherId)
-    if (teacher && teacher.materiasAsignadas) {
-      teacher.materiasAsignadas = teacher.materiasAsignadas.filter((x) => !eqId(x, removed.subjectId))
-    }
-    return null
-  }
+  if (p === "/academic-periods") return crud("academicPeriods", method, null, body)
 
-  // Academic: teachers --------------------------------------------------------
-  if (p === "/academic/teachers") {
+  // Generate sessions from ALL base schedules of the period (no body).
+  m = p.match(/^\/academic-periods\/([^/]+)\/sessions\/generate$/)
+  if (m && method === "POST") {
+    return generateSessions(m[1])
+  }
+  // Generate from a specific list of base schedules.
+  m = p.match(/^\/academic-periods\/([^/]+)\/sessions\/generate-from-base-schedules$/)
+  if (m && method === "POST") {
+    return generateSessions(m[1], body?.baseScheduleIds || [])
+  }
+  // Base schedules by period (REST alternative to ?academicPeriodId=).
+  m = p.match(/^\/academic-periods\/([^/]+)\/base-schedules$/)
+  if (m && method === "GET") {
+    return db.baseSchedules.filter((s) => eqId(s.academicPeriodId, m[1])).map(enrich)
+  }
+  // Activate / close.
+  m = p.match(/^\/academic-periods\/([^/]+)\/activate$/)
+  if (m && method === "PATCH") {
+    const period = db.academicPeriods.find((pd) => eqId(pd.id, m[1]))
+    if (!period) notFound()
+    const other = db.academicPeriods.find((pd) => pd.status === "ACTIVE" && !eqId(pd.id, m[1]))
+    if (other) badRequest("There is already an active academic period. Close it before activating another.")
+    period.status = "ACTIVE"
+    period.updatedAt = nowISO()
+    return period
+  }
+  m = p.match(/^\/academic-periods\/([^/]+)\/close$/)
+  if (m && method === "PATCH") {
+    const period = db.academicPeriods.find((pd) => eqId(pd.id, m[1]))
+    if (!period) notFound()
+    period.status = "CLOSED"
+    period.updatedAt = nowISO()
+    return period
+  }
+  m = p.match(/^\/academic-periods\/(.+)$/)
+  if (m) return crud("academicPeriods", method, m[1], body)
+
+  // Users ---------------------------------------------------------------------
+  // Subject assignments by teacher (must precede /users/{id}).
+  m = p.match(/^\/users\/([^/]+)\/subject-assignments$/)
+  if (m && method === "GET") {
+    return db.teacherSubjectAssignments.filter((a) => eqId(a.teacherId, m[1]))
+  }
+  m = p.match(/^\/users\/([^/]+)\/enable$/)
+  if (m && method === "PATCH") {
+    const u = userOf(m[1])
+    if (!u) notFound()
+    u.enabled = true
+    u.updatedAt = nowISO()
+    return u
+  }
+  m = p.match(/^\/users\/([^/]+)\/disable$/)
+  if (m && method === "PATCH") {
+    const u = userOf(m[1])
+    if (!u) notFound()
+    u.enabled = false
+    u.updatedAt = nowISO()
+    return u
+  }
+  if (p === "/users") {
+    if (method === "GET") {
+      const list = query.role ? db.users.filter((u) => u.role === query.role) : db.users
+      return list
+    }
     if (method === "POST") {
-      const record = { ...body, id: nextId(db.teachers), materiasAsignadas: [] }
-      db.teachers.push(record)
+      const record = {
+        id: uid("user"),
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        role: body.role || "TEACHER",
+        enabled: body.enabled !== undefined ? body.enabled : true,
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+      }
+      db.users.push(record)
       return record
     }
-    return crud("teachers", method, null, body)
   }
-  m = p.match(/^\/academic\/teachers\/(.+)$/)
+  m = p.match(/^\/users\/(.+)$/)
   if (m) {
     if (method === "DELETE") {
-      // also clean up assignments for this teacher
-      db.teacherSubjects = db.teacherSubjects.filter((a) => !eqId(a.teacherId, m[1]))
+      db.teacherSubjectAssignments = db.teacherSubjectAssignments.filter((a) => !eqId(a.teacherId, m[1]))
     }
-    return crud("teachers", method, m[1], body)
+    return crud("users", method, m[1], body)
+  }
+
+  // Teacher-subject assignments -----------------------------------------------
+  if (p === "/teacher-subject-assignments" && method === "POST") {
+    const record = {
+      id: uid("tsa"),
+      teacherId: body.teacherId,
+      subjectId: body.subjectId,
+      status: body.status || "ACTIVE",
+      createdAt: nowISO(),
+      updatedAt: nowISO(),
+    }
+    db.teacherSubjectAssignments.push(record)
+    return record
+  }
+  m = p.match(/^\/teacher-subject-assignments\/([^/]+)\/activate$/)
+  if (m && method === "PATCH") {
+    const a = db.teacherSubjectAssignments.find((x) => eqId(x.id, m[1]))
+    if (!a) notFound()
+    a.status = "ACTIVE"
+    a.updatedAt = nowISO()
+    return a
+  }
+  m = p.match(/^\/teacher-subject-assignments\/([^/]+)\/deactivate$/)
+  if (m && method === "PATCH") {
+    const a = db.teacherSubjectAssignments.find((x) => eqId(x.id, m[1]))
+    if (!a) notFound()
+    a.status = "INACTIVE"
+    a.updatedAt = nowISO()
+    return a
+  }
+  m = p.match(/^\/teacher-subject-assignments\/(.+)$/)
+  if (m && method === "DELETE") {
+    const idx = db.teacherSubjectAssignments.findIndex((a) => eqId(a.id, m[1]))
+    if (idx === -1) notFound()
+    db.teacherSubjectAssignments.splice(idx, 1)
+    return "Deleted successfully."
   }
 
   // Laboratories --------------------------------------------------------------
-  if (p === "/laboratories") return crud("laboratories", method, null, body)
+  m = p.match(/^\/laboratories\/([^/]+)\/status$/)
+  if (m && method === "PATCH") {
+    const lab = labOf(m[1])
+    if (!lab) notFound()
+    lab.status = body.status
+    lab.updatedAt = nowISO()
+    return lab
+  }
+  if (p === "/laboratories") {
+    if (method === "GET") {
+      let list = db.laboratories
+      if (query.status) list = list.filter((l) => l.status === query.status)
+      if (query.type) list = list.filter((l) => l.type === query.type)
+      if (query.facultyId) list = list.filter((l) => eqId(l.facultyId, query.facultyId))
+      return list
+    }
+    return crud("laboratories", method, null, body)
+  }
   m = p.match(/^\/laboratories\/(.+)$/)
   if (m) return crud("laboratories", method, m[1], body)
 
   // Base schedules ------------------------------------------------------------
   if (p === "/base-schedules") {
     if (method === "GET") {
-      const list = query.periodoId
-        ? db.baseSchedules.filter((s) => eqId(s.periodoId, query.periodoId))
+      const list = query.academicPeriodId
+        ? db.baseSchedules.filter((s) => eqId(s.academicPeriodId, query.academicPeriodId))
         : db.baseSchedules
       return list.map(enrich)
     }
     if (method === "POST") {
-      const record = { ...body, id: nextId(db.baseSchedules) }
+      const record = { ...body, id: uid("bs"), createdAt: nowISO(), updatedAt: nowISO() }
       db.baseSchedules.push(record)
       return enrich(record)
     }
@@ -304,145 +461,89 @@ function route(method, path, query, body) {
   }
 
   // Sessions ------------------------------------------------------------------
-  if (p === "/sessions/generate" && method === "POST") {
-    const { periodoId, fechaInicio, fechaFin } = body
-    // Remove existing sessions in this period within the range, then regenerate.
-    db.sessions = db.sessions.filter((s) => {
-      if (!eqId(s.periodoId, periodoId)) return true
-      return s.fecha < fechaInicio || s.fecha > fechaFin
-    })
-    const schedules = db.baseSchedules.filter((s) => eqId(s.periodoId, periodoId))
-    let count = 0
-    const [sy, sm, sd] = fechaInicio.split("-").map(Number)
-    const [ey, em, ed] = fechaFin.split("-").map(Number)
-    const cursor = new Date(sy, sm - 1, sd)
-    const end = new Date(ey, em - 1, ed)
-    while (cursor <= end) {
-      const weekday = cursor.getDay()
-      const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`
-      for (const sch of schedules) {
-        if (DAY_NUM[sch.diaSemana] === weekday) {
-          db.sessions.push({
-            id: nextId(db.sessions),
-            periodoId: numOrSelf(periodoId),
-            fecha: iso,
-            horaInicio: sch.horaInicio,
-            horaFin: sch.horaFin,
-            materiaId: sch.materiaId,
-            laboratorioId: sch.laboratorioId,
-            docenteId: sch.docenteId,
-            estado: "PROGRAMADA",
-            asistenciaDocente: null,
-          })
-          count += 1
-        }
-      }
-      cursor.setDate(cursor.getDate() + 1)
-    }
-    return { generadas: count }
-  }
-
   if (p === "/sessions" && method === "GET") {
     let list = db.sessions
-    if (query.periodoId) list = list.filter((s) => eqId(s.periodoId, query.periodoId))
-    if (query.estado) list = list.filter((s) => s.estado === query.estado)
-    if (query.laboratorioId) list = list.filter((s) => eqId(s.laboratorioId, query.laboratorioId))
-    if (query.fecha) list = list.filter((s) => s.fecha === query.fecha)
-    // newest first by date then start time
-    list = [...list].sort((a, b) => (a.fecha === b.fecha ? a.horaInicio.localeCompare(b.horaInicio) : a.fecha.localeCompare(b.fecha)))
+    if (query.academicPeriodId) list = list.filter((s) => eqId(s.academicPeriodId, query.academicPeriodId))
+    if (query.status) list = list.filter((s) => s.status === query.status)
+    if (query.laboratoryId) list = list.filter((s) => eqId(s.laboratoryId, query.laboratoryId))
+    if (query.date) list = list.filter((s) => s.date === query.date)
+    list = [...list].sort((a, b) =>
+      a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date),
+    )
     return list.map(enrich)
   }
-  m = p.match(/^\/sessions\/(.+)\/estado$/)
+  m = p.match(/^\/sessions\/([^/]+)\/status$/)
   if (m && method === "PATCH") {
     const s = db.sessions.find((x) => eqId(x.id, m[1]))
     if (!s) notFound()
-    s.estado = body.estado
+    s.status = body.status
+    s.updatedAt = nowISO()
     return enrich(s)
   }
-  m = p.match(/^\/sessions\/(.+)\/asistencia$/)
+  m = p.match(/^\/sessions\/([^/]+)\/teacher-attendance$/)
   if (m && method === "PATCH") {
     const s = db.sessions.find((x) => eqId(x.id, m[1]))
     if (!s) notFound()
-    s.asistenciaDocente = body.asistenciaDocente
+    s.teacherAttendance = body.teacherAttendance
+    s.updatedAt = nowISO()
     return enrich(s)
   }
-
-  // Dashboard -----------------------------------------------------------------
-  if (p === "/dashboard/summary") {
-    const labs = db.laboratories
-    return {
-      totalLaboratories: labs.length,
-      active: labs.filter((l) => l.estado === "ACTIVO").length,
-      maintenance: labs.filter((l) => l.estado === "EN_MANTENIMIENTO").length,
-      closed: labs.filter((l) => l.estado === "CERRADO").length,
-    }
-  }
-  if (p === "/dashboard/today-sessions") {
-    return db.sessions
-      .filter((s) => s.fecha === todayISO())
-      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
-      .map(enrich)
-  }
-  if (p === "/dashboard/laboratory-occupancy") {
-    // Sample occupancy for active labs.
-    const sample = { 1: 24, 2: 0, 3: 18, 5: 35 }
-    return db.laboratories
-      .filter((l) => l.estado === "ACTIVO")
-      .map((l) => ({
-        id: l.id,
-        nombre: l.nombre,
-        codigo: l.codigo,
-        capacidadMaxima: l.capacidadMaxima,
-        ocupados: sample[l.id] ?? 0,
-      }))
+  m = p.match(/^\/sessions\/([^/]+)\/cancel$/)
+  if (m && method === "PATCH") {
+    const s = db.sessions.find((x) => eqId(x.id, m[1]))
+    if (!s) notFound()
+    s.status = "CANCELLED"
+    s.updatedAt = nowISO()
+    return enrich(s)
   }
 
   // Public (no auth) ----------------------------------------------------------
   if (p === "/public/laboratories/status" && method === "GET") {
     const now = nowHM()
     const today = todayISO()
-    const todaySessions = db.sessions.filter((s) => s.fecha === today)
+    let labs = db.laboratories
+    if (query.facultyId) labs = labs.filter((l) => eqId(l.facultyId, query.facultyId))
+    const todaySessions = db.sessions.filter((s) => s.date === today)
 
-    const buildSesion = (s, lab, withStudents) => {
+    const buildSession = (s, withStudents) => {
       if (!s) return null
-      const doc = teacherOf(s.docenteId)
-      const mat = subjectOf(s.materiaId)
       const base = {
-        materia: mat?.nombre ?? null,
-        docente: doc?.nombre ?? null,
-        horaInicio: s.horaInicio.slice(0, 5),
-        horaFin: s.horaFin.slice(0, 5),
+        subject: subjectOf(s.subjectId)?.name ?? null,
+        teacher: fullName(userOf(s.teacherId)) ?? null,
+        startTime: s.startTime.slice(0, 5),
+        endTime: s.endTime.slice(0, 5),
       }
       if (withStudents) {
-        base.totalEstudiantes = pseudoStudents(s.id, lab.capacidadMaxima)
-        base.estadoSesion = s.estado
+        base.totalStudents = s.registeredStudentCount ?? 0
+        base.sessionStatus = s.status
       }
       return base
     }
 
-    return db.laboratories.map((lab) => {
+    return labs.map((lab) => {
       const labSessions = todaySessions
-        .filter((s) => eqId(s.laboratorioId, lab.id) && s.estado !== "CANCELADA")
-        .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+        .filter((s) => eqId(s.laboratoryId, lab.id) && s.status !== "CANCELLED")
+        .sort((a, b) => a.startTime.localeCompare(b.startTime))
       const current =
-        lab.estado === "ACTIVO"
+        lab.status === "ACTIVE"
           ? labSessions.find(
               (s) =>
-                s.estado === "EN_CURSO" ||
-                (s.horaInicio.slice(0, 5) <= now && now < s.horaFin.slice(0, 5)),
+                s.status === "IN_PROGRESS" ||
+                (s.startTime.slice(0, 5) <= now && now < s.endTime.slice(0, 5)),
             )
           : null
-      const next = labSessions.find((s) => s.horaInicio.slice(0, 5) > now && !eqId(s.id, current?.id))
+      const next = labSessions.find((s) => s.startTime.slice(0, 5) > now && !eqId(s.id, current?.id))
 
       return {
         id: lab.id,
-        codigo: lab.codigo,
-        nombre: lab.nombre,
-        tipo: lab.tipo,
-        capacidadMaxima: lab.capacidadMaxima,
-        estado: lab.estado,
-        sesionActual: buildSesion(current, lab, true),
-        proximaSesion: buildSesion(next, lab, false),
+        facultyId: lab.facultyId,
+        code: lab.code,
+        name: lab.name,
+        type: lab.type,
+        capacity: lab.capacity,
+        status: lab.status,
+        currentSession: buildSession(current, true),
+        nextSession: buildSession(next, false),
       }
     })
   }
@@ -450,28 +551,84 @@ function route(method, path, query, body) {
   if (p === "/public/sessions/today" && method === "GET") {
     const today = todayISO()
     return db.sessions
-      .filter((s) => s.fecha === today)
-      .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio))
+      .filter((s) => s.date === today)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))
       .map((s) => {
-        const lab = labOf(s.laboratorioId)
-        const doc = teacherOf(s.docenteId)
-        const mat = subjectOf(s.materiaId)
+        const lab = labOf(s.laboratoryId)
         return {
           id: s.id,
-          materia: mat?.nombre ?? null,
-          docente: doc?.nombre ?? null,
-          laboratorio: lab?.nombre ?? null,
-          codigoLab: lab?.codigo ?? null,
-          horaInicio: s.horaInicio.slice(0, 5),
-          horaFin: s.horaFin.slice(0, 5),
-          totalEstudiantes: lab ? pseudoStudents(s.id, lab.capacidadMaxima) : 0,
-          estado: s.estado,
+          subjectId: s.subjectId,
+          laboratoryId: s.laboratoryId,
+          teacherId: s.teacherId,
+          subject: subjectOf(s.subjectId)?.name ?? null,
+          teacher: fullName(userOf(s.teacherId)) ?? null,
+          laboratory: lab?.name ?? null,
+          labCode: lab?.code ?? null,
+          startTime: s.startTime.slice(0, 5),
+          endTime: s.endTime.slice(0, 5),
+          totalStudents: s.registeredStudentCount ?? 0,
+          status: s.status,
         }
       })
   }
 
   // Fallback ------------------------------------------------------------------
   notFound()
+}
+
+/** Generates concrete sessions from base schedules of a period. */
+function generateSessions(academicPeriodId, onlyIds) {
+  const period = db.academicPeriods.find((pd) => eqId(pd.id, academicPeriodId))
+  if (!period) notFound()
+  const startDate = period.startDate
+  const endDate = period.endDate
+  if (!startDate || !endDate) badRequest("The academic period has no start/end date.")
+
+  let schedules = db.baseSchedules.filter((s) => eqId(s.academicPeriodId, academicPeriodId))
+  if (onlyIds && onlyIds.length) {
+    schedules = schedules.filter((s) => onlyIds.some((id) => eqId(id, s.id)))
+  }
+
+  // Remove existing sessions in this period within the range, then regenerate.
+  db.sessions = db.sessions.filter((s) => {
+    if (!eqId(s.academicPeriodId, academicPeriodId)) return true
+    return s.date < startDate || s.date > endDate
+  })
+
+  const created = []
+  const [sy, sm, sd] = startDate.split("-").map(Number)
+  const [ey, em, ed] = endDate.split("-").map(Number)
+  const cursor = new Date(sy, sm - 1, sd)
+  const end = new Date(ey, em - 1, ed)
+  while (cursor <= end) {
+    const weekday = cursor.getDay()
+    const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`
+    for (const sch of schedules) {
+      if (DAY_NUM[sch.weekDay] === weekday) {
+        const record = {
+          id: uid("ses"),
+          baseScheduleId: sch.id,
+          academicPeriodId,
+          teacherId: sch.teacherId,
+          subjectId: sch.subjectId,
+          laboratoryId: sch.laboratoryId,
+          date: iso,
+          startTime: sch.startTime,
+          endTime: sch.endTime,
+          registeredStudentCount: sch.registeredStudentCount ?? 0,
+          attendedStudentCount: 0,
+          status: "SCHEDULED",
+          teacherAttendance: "NOT_RECORDED",
+          createdAt: nowISO(),
+          updatedAt: nowISO(),
+        }
+        db.sessions.push(record)
+        created.push(enrich(record))
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return created
 }
 
 /**

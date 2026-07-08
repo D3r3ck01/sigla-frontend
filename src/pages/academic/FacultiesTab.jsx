@@ -5,10 +5,12 @@ export function FacultiesTab() {
     <CrudTab
       title="Facultades"
       entityLabel="Facultad"
-      endpoint="/academic/faculties"
-      emptyForm={{ nombre: "" }}
-      fields={[{ name: "nombre", label: "Nombre", required: true, placeholder: "Ej. Ingeniería" }]}
-      columns={[{ key: "nombre", header: "Nombre", render: (r) => <span className="font-medium">{r.nombre}</span> }]}
+      endpoint="/faculties"
+      emptyForm={{ name: "" }}
+      toForm={(r) => ({ name: r.name || "" })}
+      getName={(r) => r.name}
+      fields={[{ name: "name", label: "Nombre", required: true, placeholder: "Ej. Ingeniería" }]}
+      columns={[{ key: "name", header: "Nombre", render: (r) => <span className="font-medium">{r.name}</span> }]}
     />
   )
 }

@@ -11,13 +11,16 @@ export function PeriodProvider({ children }) {
   const loadPeriods = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await api.get("/academic/periods")
+      const [data, active] = await Promise.all([
+        api.get("/academic-periods"),
+        api.get("/academic-periods/active").catch(() => null),
+      ])
       const list = Array.isArray(data) ? data : data?.content || []
       setPeriods(list)
       setSelectedId((prev) => {
         if (prev && list.some((p) => p.id === prev)) return prev
-        const active = list.find((p) => p.estado === "ACTIVO")
-        return active?.id || list[0]?.id || null
+        const activePeriod = active || list.find((p) => p.status === "ACTIVE")
+        return activePeriod?.id || list[0]?.id || null
       })
     } catch {
       // Silent — topbar selector will just be empty if it fails.
