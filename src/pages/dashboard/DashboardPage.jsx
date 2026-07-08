@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import {
   FlaskConical,
   CircleCheck,
@@ -9,6 +10,8 @@ import {
   User,
   CalendarClock,
   ArrowRight,
+  AlertTriangle,
+  ShieldCheck,
   X,
 } from "lucide-react"
 import { api } from "../../lib/api"
@@ -19,13 +22,36 @@ import { KpiCard } from "../../components/KpiCard"
 import { Card, CardHeader, CardBody } from "../../components/Card"
 import { Button } from "../../components/Button"
 import { StatusBadge } from "../../components/Badge"
-import { ProgressBar } from "../../components/ProgressBar"
 import { Select } from "../../components/Field"
 import { formatTime } from "../../lib/utils"
+import { LabStatusCard } from "../public/LabStatusCard"
+import { priorityMeta, relativeTime } from "../../lib/labUi"
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
+const ACTIVE = (i) => i.status === "OPEN" || i.status === "IN_PROGRESS"
+
+// Lazy loaders for the card's expandable panel (admin, authenticated).
+async function fetchLabInventory(labId) {
+  const [wsData, eqData] = await Promise.all([
+    api.get(`/workstations?laboratoryId=${labId}`).catch(() => []),
+    api.get(`/equipment?laboratoryId=${labId}`).catch(() => []),
+  ])
+  const equipment = asList(eqData)
+  const workstations = asList(wsData).map((w) => ({
+    ...w,
+    equipment: equipment.find((e) => String(e.workstationId) === String(w.id)) || null,
+  }))
+  const devices = equipment.filter((e) => e.workstationId == null)
+  return { workstations, devices }
+}
+
+async function fetchLabIncidents(labId) {
+  const list = await api.get(`/incidents?laboratoryId=${labId}`).catch(() => [])
+  return asList(list).filter(ACTIVE)
+}
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { selectedId: academicPeriodId, selected } = usePeriod()
 
   const [facultyId, setFacultyId] = useState("")
@@ -33,19 +59,22 @@ export function DashboardPage() {
   const [careersByFaculty, setCareersByFaculty] = useState([])
 
   const loadAll = useCallback(async () => {
-    const [faculties, labs, subjects, sessions] = await Promise.all([
+    const [faculties, labs, subjects, sessions, openInc, progInc] = await Promise.all([
       api.get("/faculties").catch(() => []),
       api.get("/laboratories").catch(() => []),
       api.get("/subjects").catch(() => []),
       academicPeriodId
         ? api.get(`/sessions?academicPeriodId=${academicPeriodId}&date=${todayISO()}`).catch(() => [])
         : Promise.resolve([]),
+      api.get("/incidents?status=OPEN").catch(() => []),
+      api.get("/incidents?status=IN_PROGRESS").catch(() => []),
     ])
     return {
       allFaculties: asList(faculties),
       allLabs: asList(labs),
       allSubjects: asList(subjects),
       todaySessions: asList(sessions),
+      activeIncidents: [...asList(openInc), ...asList(progInc)],
     }
   }, [academicPeriodId])
 
@@ -54,6 +83,7 @@ export function DashboardPage() {
   const allLabs = data?.allLabs || []
   const allSubjects = data?.allSubjects || []
   const todaySessions = data?.todaySessions || []
+  const activeIncidents = data?.activeIncidents || []
 
   // Cascading academic programs when a faculty is selected.
   useEffect(() => {
@@ -80,7 +110,6 @@ export function DashboardPage() {
     return map
   }, [allSubjects])
 
-  // Labs filtered by faculty (academic program does not affect KPIs / occupancy).
   const filteredLabs = useMemo(() => {
     if (!facultyId) return allLabs
     return allLabs.filter((l) => String(l.facultyId) === String(facultyId))
@@ -104,18 +133,62 @@ export function DashboardPage() {
     [filteredLabs],
   )
 
-  // Occupancy per (filtered) laboratory, derived from today's in-progress sessions.
-  const occupancy = useMemo(() => {
+  // Group active incidents by lab and build a compact summary per lab.
+  const incidentsByLab = useMemo(() => {
+    const map = new Map()
+    for (const inc of activeIncidents) {
+      const arr = map.get(inc.laboratoryId) || []
+      arr.push(inc)
+      map.set(inc.laboratoryId, arr)
+    }
+    return map
+  }, [activeIncidents])
+
+  function incidentSummaryFor(labId) {
+    const list = incidentsByLab.get(labId) || []
+    return {
+      openIncidents: list.filter((i) => i.status === "OPEN").length,
+      inProgressIncidents: list.filter((i) => i.status === "IN_PROGRESS").length,
+      criticalIncidents: list.filter((i) => i.priority === "CRITICAL").length,
+    }
+  }
+
+  // Lab objects enriched for the compact card (current session from today's sessions).
+  const cardLabs = useMemo(() => {
     return filteredLabs.map((lab) => {
       const current = filteredSessions.find(
         (s) => String(s.laboratoryId) === String(lab.id) && s.status === "IN_PROGRESS",
       )
-      const students = current?.registeredStudentCount ?? 0
-      const max = lab.capacity ?? 0
-      const pct = max > 0 && current ? Math.min(100, (students / max) * 100) : 0
-      return { id: lab.id, code: lab.code, name: lab.name, students, max, pct, busy: Boolean(current) }
+      const currentSession = current
+        ? {
+            subject: current.subjectName || "Materia",
+            teacher: current.teacherName || "Docente",
+            startTime: formatTime(current.startTime),
+            endTime: formatTime(current.endTime),
+            totalStudents: current.registeredStudentCount ?? 0,
+          }
+        : null
+      return { ...lab, currentSession, inventorySummary: null, incidentSummary: incidentSummaryFor(lab.id) }
     })
-  }, [filteredLabs, filteredSessions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredLabs, filteredSessions, incidentsByLab])
+
+  // Operational alerts: HIGH + CRITICAL active incidents (max 5).
+  const alerts = useMemo(() => {
+    const labName = (id) => allLabs.find((l) => String(l.id) === String(id))
+    return activeIncidents
+      .filter((i) => i.priority === "HIGH" || i.priority === "CRITICAL")
+      .filter((i) => !facultyId || String(labFacultyMap.get(i.laboratoryId)) === String(facultyId))
+      .sort((a, b) => {
+        const order = { CRITICAL: 0, HIGH: 1 }
+        if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority]
+        return String(b.createdAt).localeCompare(String(a.createdAt))
+      })
+      .map((i) => {
+        const lab = labName(i.laboratoryId)
+        return { ...i, labCode: lab?.code, labName: lab?.name }
+      })
+  }, [activeIncidents, allLabs, facultyId, labFacultyMap])
 
   const selectedFaculty = allFaculties.find((f) => String(f.id) === String(facultyId))
   const selectedProgram = careersByFaculty.find((p) => String(p.id) === String(programId))
@@ -221,84 +294,143 @@ export function DashboardPage() {
         <KpiCard icon={CircleX} label="Cerrados" value={summary.closed} accent="red" loading={loading} />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Today's sessions */}
-        <Card>
-          <CardHeader title="Sesiones de hoy" subtitle={`${filteredSessions.length} sesión(es) programadas`} />
-          <CardBody className="p-0">
-            {loading ? (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">Cargando…</div>
-            ) : filteredSessions.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 px-5 py-10 text-center text-muted-foreground">
-                <CalendarClock className="h-8 w-8" />
-                <p className="text-sm">No hay sesiones programadas para hoy.</p>
-                {hasActiveFilter && (
-                  <p className="text-xs">No hay sesiones para la facultad/carrera seleccionada.</p>
-                )}
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {filteredSessions.map((s) => (
-                  <li key={s.id} className="flex items-center gap-4 px-5 py-3.5">
-                    <div className="flex w-16 shrink-0 flex-col">
-                      <span className="flex items-center gap-1 text-sm font-semibold text-foreground">
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        {formatTime(s.startTime)}
+      {/* Operational alerts */}
+      {!loading && alerts.length > 0 && (
+        <Card className="mt-6 border-l-4 border-l-[#C8102E]">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2 text-[#B91C1C]">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                Alertas operativas
+              </span>
+            }
+            subtitle={`${alerts.length} incidencia(s) de prioridad alta o crítica`}
+          />
+          <CardBody className="space-y-2">
+            {alerts.slice(0, 5).map((a) => {
+              const pm = priorityMeta(a.priority)
+              return (
+                <div
+                  key={a.id}
+                  className="flex flex-col gap-1 rounded-lg border border-border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="mb-0.5 flex items-center gap-2">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                        style={{ backgroundColor: pm.bg, color: pm.fg }}
+                      >
+                        {pm.label}
                       </span>
-                      <span className="text-xs text-muted-foreground">{formatTime(s.endTime)}</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {a.labCode} &mdash; {a.labName}
+                      </span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {s.subjectName || "Materia"}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {s.laboratoryName || s.laboratoryCode || "Laboratorio"}
-                        {" · "}
-                        <span className="inline-flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {s.teacherName || "Docente"}
-                        </span>
-                      </p>
-                    </div>
-                    <StatusBadge value={s.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-
-        {/* Occupancy */}
-        <Card>
-          <CardHeader title="Ocupación por laboratorio" subtitle="Uso actual de cada laboratorio" />
-          <CardBody className="space-y-4">
-            {loading ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">Cargando…</div>
-            ) : occupancy.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                {hasActiveFilter
-                  ? "No hay laboratorios para la facultad seleccionada."
-                  : "No hay datos de ocupación."}
-              </div>
-            ) : (
-              occupancy.map((lab) => (
-                <div key={lab.id}>
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{lab.name}</p>
-                      <p className="text-xs text-muted-foreground">{lab.code}</p>
-                    </div>
-                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                      {lab.busy ? `${lab.students}/${lab.max} estudiantes` : "Libre"}
-                    </span>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {a.code} &mdash; {a.description}
+                    </p>
                   </div>
-                  <ProgressBar value={lab.pct} />
+                  <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(a.createdAt)}</span>
                 </div>
-              ))
-            )}
+              )
+            })}
+            <button
+              type="button"
+              onClick={() => navigate("/admin/incidents")}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[#003B7A] hover:underline"
+            >
+              Ver todas las incidencias
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </button>
           </CardBody>
         </Card>
-      </div>
+      )}
+
+      {/* Laboratories (redesigned cards) */}
+      <section className="mt-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Estado de laboratorios</h2>
+          {!loading && alerts.length === 0 && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-[#16A34A]">
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              Sin alertas críticas activas.
+            </span>
+          )}
+        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-40 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : cardLabs.length === 0 ? (
+          <Card>
+            <CardBody className="py-10 text-center text-sm text-muted-foreground">
+              {hasActiveFilter
+                ? "No hay laboratorios para la facultad seleccionada."
+                : "No hay laboratorios registrados."}
+            </CardBody>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {cardLabs.map((lab) => (
+              <LabStatusCard
+                key={lab.id}
+                lab={lab}
+                compact
+                fetchInventory={fetchLabInventory}
+                fetchIncidents={fetchLabIncidents}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Today's sessions */}
+      <Card className="mt-6">
+        <CardHeader title="Sesiones de hoy" subtitle={`${filteredSessions.length} sesión(es) programadas`} />
+        <CardBody className="p-0">
+          {loading ? (
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">Cargando…</div>
+          ) : filteredSessions.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-5 py-10 text-center text-muted-foreground">
+              <CalendarClock className="h-8 w-8" />
+              <p className="text-sm">No hay sesiones programadas para hoy.</p>
+              {hasActiveFilter && (
+                <p className="text-xs">No hay sesiones para la facultad/carrera seleccionada.</p>
+              )}
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {filteredSessions.map((s) => (
+                <li key={s.id} className="flex items-center gap-4 px-5 py-3.5">
+                  <div className="flex w-16 shrink-0 flex-col">
+                    <span className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      {formatTime(s.startTime)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{formatTime(s.endTime)}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {s.subjectName || "Materia"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {s.laboratoryName || s.laboratoryCode || "Laboratorio"}
+                      {" · "}
+                      <span className="inline-flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {s.teacherName || "Docente"}
+                      </span>
+                    </p>
+                  </div>
+                  <StatusBadge value={s.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
     </div>
   )
 }
