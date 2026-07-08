@@ -206,7 +206,7 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Dashboard"
+        title="Panel de control"
         description="Resumen general del estado de los laboratorios y la actividad del día."
         actions={
           <Button variant="secondary" onClick={() => refetch()} loading={loading}>

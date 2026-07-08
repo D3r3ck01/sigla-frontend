@@ -11,6 +11,7 @@ import { RowActions } from "../../components/RowActions"
 import { Modal } from "../../components/Modal"
 import { ConfirmDialog } from "../../components/ConfirmDialog"
 import { Field, Input, Select } from "../../components/Field"
+import { getInitials, getAvatarColor } from "../../lib/labUi"
 
 const empty = { firstName: "", lastName: "", email: "", password: "" }
 
@@ -26,6 +27,8 @@ export function TeachersTab() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(empty)
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState("")
   const [saving, setSaving] = useState(false)
   const [toDelete, setToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -56,6 +59,8 @@ export function TeachersTab() {
   function openCreate() {
     setEditing(null)
     setForm(empty)
+    setImageFile(null)
+    setImagePreview("")
     setAssignments([])
     setModalOpen(true)
   }
@@ -63,8 +68,17 @@ export function TeachersTab() {
   function openEdit(t) {
     setEditing(t)
     setForm({ firstName: t.firstName || "", lastName: t.lastName || "", email: t.email || "", password: "" })
+    setImageFile(null)
+    setImagePreview(t.imageUrl || "")
     setNewSubjectId("")
     setModalOpen(true)
+  }
+
+  function handleImageChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
   }
 
   useEffect(() => {
@@ -85,9 +99,14 @@ export function TeachersTab() {
           lastName: form.lastName,
           email: form.email,
         })
+        if (imageFile) {
+          const fd = new FormData()
+          fd.append("file", imageFile)
+          await api.post(`/users/${editing.id}/image`, fd)
+        }
         toast.success("Docente actualizado correctamente.")
       } else {
-        await api.post("/users", {
+        const created = await api.post("/users", {
           firstName: form.firstName,
           lastName: form.lastName,
           email: form.email,
@@ -95,6 +114,11 @@ export function TeachersTab() {
           role: "TEACHER",
           enabled: true,
         })
+        if (imageFile && created?.id) {
+          const fd = new FormData()
+          fd.append("file", imageFile)
+          await api.post(`/users/${created.id}/image`, fd)
+        }
         toast.success("Docente creado correctamente.")
       }
       setModalOpen(false)
@@ -167,6 +191,28 @@ export function TeachersTab() {
 
   const columns = [
     {
+      key: "photo",
+      header: "Foto",
+      render: (r) => {
+        const name = `${r.firstName} ${r.lastName}`.trim()
+        return r.imageUrl ? (
+          <img
+            src={r.imageUrl || "/placeholder.svg"}
+            alt={name}
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: getAvatarColor(name) }}
+            aria-hidden="true"
+          >
+            {getInitials(name)}
+          </span>
+        )
+      },
+    },
+    {
       key: "name",
       header: "Nombre",
       render: (r) => <span className="font-medium">{`${r.firstName} ${r.lastName}`.trim()}</span>,
@@ -235,6 +281,31 @@ export function TeachersTab() {
           </div>
           <Field label="Correo" required>
             <Input type="email" required placeholder="docente@uce.edu.ec" value={form.email} onChange={(e) => set("email", e.target.value)} />
+          </Field>
+          <Field label="Foto (opcional)">
+            <div className="flex items-center gap-3">
+              {imagePreview ? (
+                <img
+                  src={imagePreview || "/placeholder.svg"}
+                  alt="Vista previa"
+                  className="h-12 w-12 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white"
+                  style={{ backgroundColor: getAvatarColor(`${form.firstName} ${form.lastName}`) }}
+                  aria-hidden="true"
+                >
+                  {getInitials(`${form.firstName} ${form.lastName}`.trim() || "?")}
+                </span>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
+              />
+            </div>
           </Field>
           {!editing && (
             <Field label="Contraseña" required>

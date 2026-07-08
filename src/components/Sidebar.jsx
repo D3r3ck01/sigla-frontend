@@ -17,7 +17,7 @@ import { asList } from "../lib/useAsync"
 import { useAuth } from "../context/AuthContext"
 
 const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Panel de control", icon: LayoutDashboard },
   { to: "/academic", label: "Académico", icon: GraduationCap },
   { to: "/laboratories", label: "Laboratorios", icon: FlaskConical },
   { to: "/admin/inventory", label: "Inventario", icon: Monitor },

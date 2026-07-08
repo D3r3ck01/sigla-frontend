@@ -170,13 +170,21 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
           <>
             <p className="text-[11px] font-bold uppercase tracking-wide text-[#003B7A]">En clase ahora</p>
             <div className="flex items-start gap-3">
-              <span
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-bold text-white"
-                style={{ backgroundColor: getAvatarColor(session.teacher) }}
-                aria-hidden="true"
-              >
-                {getInitials(session.teacher)}
-              </span>
+              {session.teacherImageUrl ? (
+                <img
+                  src={session.teacherImageUrl || "/placeholder.svg"}
+                  alt={session.teacher}
+                  className="h-12 w-12 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-bold text-white"
+                  style={{ backgroundColor: getAvatarColor(session.teacher) }}
+                  aria-hidden="true"
+                >
+                  {getInitials(session.teacher)}
+                </span>
+              )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[#1F2937]">{session.teacher}</p>
                 <p className="truncate text-sm text-[#374151]">{session.subject}</p>

@@ -18,7 +18,7 @@ export function WorkstationGrid({ workstations = [], onSelect, cell = 28 }) {
     <div className="flex flex-wrap gap-1.5" role="list" aria-label="Estaciones de trabajo">
       {workstations.map((ws) => {
         const meta = wsStatusMeta(ws.status)
-        const eq = ws.equipment
+        const items = Array.isArray(ws.equipment) ? ws.equipment : ws.equipment ? [ws.equipment] : []
         return (
           <div key={ws.id} className="group relative" role="listitem">
             <button
