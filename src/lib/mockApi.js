@@ -14,7 +14,7 @@
  */
 
 const DB_KEY = "sigla_mock_db"
-const DB_VERSION = 3 // bump to force a reseed when the seed shape changes
+const DB_VERSION = 4 // bump to force a reseed when the seed shape changes
 
 // ── date helpers ───────────────────────────────────────────────────────────
 function todayISO() {
@@ -53,12 +53,248 @@ const DAY_NUM = {
   SATURDAY: 6,
 }
 
+// ── Phase 2 / Phase 3 seed builders ──────────────────────────────────────────
+// Row letters used for workstation coordinates.
+const ROW_LETTERS = "ABCDEFGH".split("")
+
+/**
+ * Builds a workstation grid for a laboratory.
+ * @param {string} labId          laboratory id (e.g. "lab-1")
+ * @param {string} num            numeric code prefix used in ids (e.g. "101")
+ * @param {number} count          total number of workstations
+ * @param {number} cols           columns per row
+ * @param {object} opts           { defaultStatus, overrides }
+ */
+function buildStations(labId, num, count, cols, opts = {}) {
+  const { defaultStatus = "AVAILABLE", overrides = {} } = opts
+  const list = []
+  let n = 0
+  for (let r = 0; n < count; r++) {
+    for (let c = 1; c <= cols && n < count; c++) {
+      const code = `${ROW_LETTERS[r]}${c}`
+      list.push({
+        id: `ws-${num}-${code}`,
+        laboratoryId: labId,
+        code,
+        row: ROW_LETTERS[r],
+        column: c,
+        status: overrides[code] || defaultStatus,
+      })
+      n++
+    }
+  }
+  return list
+}
+
+/** Builds one computer per workstation, mirroring the workstation status. */
+function buildComputers(stations, num, spec) {
+  const wsStatusToEquip = {
+    AVAILABLE: "OPERATIONAL",
+    OCCUPIED: "OPERATIONAL",
+    UNDER_MAINTENANCE: "UNDER_MAINTENANCE",
+    OUT_OF_SERVICE: "OUT_OF_SERVICE",
+  }
+  return stations.map((ws) => ({
+    id: `eq-${num}-${ws.code}`,
+    laboratoryId: ws.laboratoryId,
+    workstationId: ws.id,
+    type: "COMPUTING",
+    brand: spec.brand,
+    model: spec.model,
+    cpu: spec.cpu,
+    ram: spec.ram,
+    storage: spec.storage,
+    status: wsStatusToEquip[ws.status] || "OPERATIONAL",
+    softwareInstalled: [...spec.software],
+  }))
+}
+
+function buildSeedWorkstations() {
+  return [
+    // LAB-101 — Programming Room 1 (30, 5 rows × 6 cols)
+    ...buildStations("lab-1", "101", 30, 6, {
+      overrides: { A3: "UNDER_MAINTENANCE", C4: "UNDER_MAINTENANCE", E6: "OUT_OF_SERVICE" },
+    }),
+    // LAB-102 — Programming Room 2 (25, 5 rows × 5 cols)
+    ...buildStations("lab-2", "102", 25, 5, {
+      overrides: { B2: "UNDER_MAINTENANCE" },
+    }),
+    // LAB-201 — Networking Room (20, 4 rows × 5 cols)
+    ...buildStations("lab-3", "201", 20, 5, {
+      overrides: { D5: "OUT_OF_SERVICE" },
+    }),
+    // LAB-202 — IT Infrastructure Room (18, all under maintenance)
+    ...buildStations("lab-4", "202", 18, 6, { defaultStatus: "UNDER_MAINTENANCE" }),
+    // LAB-103 — Database Room (28, lab is closed → stations left available)
+    ...buildStations("lab-6", "103", 28, 7),
+    // AULA-301 — Main Lecture Hall has no workstations (theoretical classroom)
+  ]
+}
+
+function buildSeedEquipment(workstations) {
+  const wsFor = (labId) => workstations.filter((w) => w.laboratoryId === labId)
+
+  const hpSpec = {
+    brand: "HP",
+    model: "ProDesk 600 G6",
+    cpu: "Intel Core i7-10700",
+    ram: "16 GB",
+    storage: "512 GB SSD",
+    software: ["Windows 11 Pro", "Visual Studio Code", "JDK 21", "IntelliJ IDEA", "Git", "PostgreSQL 16"],
+  }
+  const dellSpec = {
+    brand: "Dell",
+    model: "OptiPlex 7090",
+    cpu: "Intel Core i5-11500",
+    ram: "8 GB",
+    storage: "256 GB SSD",
+    software: ["Windows 11 Pro", "Cisco Packet Tracer", "Wireshark", "PuTTY", "GNS3"],
+  }
+  const dbSpec = {
+    brand: "Lenovo",
+    model: "ThinkCentre M75q",
+    cpu: "AMD Ryzen 5 PRO 4650GE",
+    ram: "16 GB",
+    storage: "512 GB SSD",
+    software: ["Windows 11 Pro", "PostgreSQL 16", "MySQL Workbench", "MongoDB Compass", "DBeaver"],
+  }
+
+  const computers = [
+    // COMPUTING labs
+    ...buildComputers(wsFor("lab-1"), "101", hpSpec),
+    ...buildComputers(wsFor("lab-2"), "102", hpSpec),
+    // NETWORKS lab — Dell workstations
+    ...buildComputers(wsFor("lab-3"), "201", dellSpec),
+    // Database Room (COMPUTING)
+    ...buildComputers(wsFor("lab-6"), "103", dbSpec),
+  ]
+
+  // Dedicated networking devices (no workstation).
+  const devices = [
+    {
+      id: "eq-201-R1",
+      laboratoryId: "lab-3",
+      workstationId: null,
+      type: "NETWORKING_DEVICE",
+      brand: "Cisco",
+      model: "Catalyst 2960-X",
+      cpu: null,
+      ram: "64 MB",
+      storage: "128 MB Flash",
+      status: "OPERATIONAL",
+      softwareInstalled: ["IOS 15.2"],
+    },
+    {
+      id: "eq-201-R2",
+      laboratoryId: "lab-3",
+      workstationId: null,
+      type: "NETWORKING_DEVICE",
+      brand: "Cisco",
+      model: "ISR 4321 Router",
+      cpu: null,
+      ram: "4 GB",
+      storage: "4 GB Flash",
+      status: "UNDER_MAINTENANCE",
+      softwareInstalled: ["IOS XE 16.9"],
+    },
+    // Lecture hall projector — no workstation, THEORETICAL still has 1 device.
+    {
+      id: "eq-301-P1",
+      laboratoryId: "lab-5",
+      workstationId: null,
+      type: "PROJECTOR",
+      brand: "Epson",
+      model: "PowerLite X49",
+      cpu: null,
+      ram: null,
+      storage: null,
+      status: "OPERATIONAL",
+      softwareInstalled: [],
+    },
+  ]
+
+  return [...computers, ...devices]
+}
+
+function buildSeedIncidents() {
+  return [
+    {
+      id: "inc-001",
+      code: "INC-2026-001",
+      laboratoryId: "lab-1",
+      workstationId: "ws-101-A3",
+      equipmentId: "eq-101-A3",
+      type: "INCIDENT",
+      category: "HARDWARE",
+      description: "The workstation at seat A3 does not power on at the start of class.",
+      status: "IN_PROGRESS",
+      priority: "HIGH",
+      reportedBy: "Eng. Carlos Vásquez",
+      createdAt: "2026-07-07T08:15:00Z",
+      actions: [
+        "Technician inspected the computer — power supply failure.",
+        "Replacement part has been requested.",
+      ],
+    },
+    {
+      id: "inc-002",
+      code: "INC-2026-002",
+      laboratoryId: "lab-3",
+      workstationId: null,
+      equipmentId: "eq-201-R2",
+      type: "INCIDENT",
+      category: "NETWORKING",
+      description: "Cisco ISR 4321 router shows intermittent connectivity on GigabitEthernet0/0/1.",
+      status: "OPEN",
+      priority: "CRITICAL",
+      reportedBy: "Eng. María Jaramillo",
+      createdAt: "2026-07-06T14:30:00Z",
+      actions: [],
+    },
+    {
+      id: "inc-003",
+      code: "INC-2026-003",
+      laboratoryId: "lab-1",
+      workstationId: null,
+      equipmentId: null,
+      type: "REQUEST",
+      category: "SOFTWARE",
+      description: "Request to install Docker Desktop on all LAB-101 computers for the Software Architecture course.",
+      status: "OPEN",
+      priority: "MEDIUM",
+      reportedBy: "Eng. Carlos Vásquez",
+      createdAt: "2026-07-05T10:00:00Z",
+      actions: [],
+    },
+    {
+      id: "inc-004",
+      code: "INC-2026-004",
+      laboratoryId: "lab-4",
+      workstationId: null,
+      equipmentId: null,
+      type: "INCIDENT",
+      category: "INFRASTRUCTURE",
+      description: "Laboratory air conditioning is out of service. Lab remains under maintenance until further notice.",
+      status: "IN_PROGRESS",
+      priority: "HIGH",
+      reportedBy: "UCE Administrator",
+      createdAt: "2026-07-01T09:00:00Z",
+      actions: ["Maintenance technician scheduled for July 10."],
+    },
+  ]
+}
+
 // ── seed data (UCE) ──────────────────────────────────────────────────────────
 function seed() {
   const ts = nowISO()
   const stamp = { createdAt: ts, updatedAt: ts }
+  const workstations = buildSeedWorkstations()
+  const equipment = buildSeedEquipment(workstations)
   return {
     _v: DB_VERSION,
+    workstations,
+    equipment,
+    incidents: buildSeedIncidents(),
     faculties: [
       { id: "fac-1", name: "Faculty of Engineering and Applied Sciences", ...stamp },
       { id: "fac-2", name: "Faculty of Medical Sciences", ...stamp },
@@ -71,10 +307,10 @@ function seed() {
     subjects: [
       { id: "subj-1", academicProgramId: "prog-1", name: "Programming I", semester: 1, ...stamp },
       { id: "subj-2", academicProgramId: "prog-1", name: "Data Structures", semester: 2, ...stamp },
-      { id: "subj-3", academicProgramId: "prog-1", name: "Databases", semester: 3, ...stamp },
-      { id: "subj-4", academicProgramId: "prog-2", name: "Computer Networks", semester: 4, ...stamp },
-      { id: "subj-5", academicProgramId: "prog-2", name: "Operating Systems", semester: 5, ...stamp },
-      { id: "subj-6", academicProgramId: "prog-3", name: "Human Anatomy", semester: 1, ...stamp },
+      { id: "subj-3", academicProgramId: "prog-1", name: "IT Infrastructure I", semester: 3, ...stamp },
+      { id: "subj-4", academicProgramId: "prog-2", name: "Computer Networks", semester: 5, ...stamp },
+      { id: "subj-5", academicProgramId: "prog-1", name: "Software Architecture", semester: 7, ...stamp },
+      { id: "subj-6", academicProgramId: "prog-1", name: "Databases", semester: 4, ...stamp },
     ],
     users: [
       { id: "user-admin", firstName: "System", lastName: "Administrator", email: "admin@uce.edu.ec", role: "ADMIN", enabled: true, ...stamp },
@@ -96,12 +332,12 @@ function seed() {
       { id: "period-2", name: "2025-I", startDate: "2025-04-01", endDate: "2025-08-31", status: "ACTIVE", ...stamp },
     ],
     laboratories: [
-      { id: "lab-1", facultyId: "fac-1", code: "LAB-101", name: "Computer Lab 1", type: "COMPUTING", capacity: 30, status: "ACTIVE", ...stamp },
-      { id: "lab-2", facultyId: "fac-1", code: "LAB-102", name: "Computer Lab 2", type: "COMPUTING", capacity: 25, status: "ACTIVE", ...stamp },
-      { id: "lab-3", facultyId: "fac-1", code: "LAB-201", name: "Networking Lab", type: "NETWORKS", capacity: 20, status: "ACTIVE", ...stamp },
-      { id: "lab-4", facultyId: "fac-1", code: "LAB-202", name: "Industrial Lab", type: "INDUSTRIAL", capacity: 18, status: "UNDER_MAINTENANCE", ...stamp },
-      { id: "lab-5", facultyId: "fac-2", code: "CLASS-301", name: "Theory Classroom 1", type: "THEORETICAL", capacity: 40, status: "ACTIVE", ...stamp },
-      { id: "lab-6", facultyId: "fac-1", code: "LAB-103", name: "Computer Lab 3", type: "COMPUTING", capacity: 28, status: "CLOSED", ...stamp },
+      { id: "lab-1", facultyId: "fac-1", code: "LAB-101", name: "Programming Room 1", type: "COMPUTING", capacity: 30, status: "ACTIVE", ...stamp },
+      { id: "lab-2", facultyId: "fac-1", code: "LAB-102", name: "Programming Room 2", type: "COMPUTING", capacity: 25, status: "ACTIVE", ...stamp },
+      { id: "lab-3", facultyId: "fac-1", code: "LAB-201", name: "Networking and Telecommunications Room", type: "NETWORKS", capacity: 20, status: "ACTIVE", ...stamp },
+      { id: "lab-4", facultyId: "fac-1", code: "LAB-202", name: "IT Infrastructure Room", type: "INDUSTRIAL", capacity: 18, status: "UNDER_MAINTENANCE", ...stamp },
+      { id: "lab-5", facultyId: "fac-2", code: "AULA-301", name: "Main Lecture Hall", type: "THEORETICAL", capacity: 40, status: "ACTIVE", ...stamp },
+      { id: "lab-6", facultyId: "fac-1", code: "LAB-103", name: "Database Room", type: "COMPUTING", capacity: 28, status: "CLOSED", ...stamp },
     ],
     baseSchedules: [
       { id: "bs-1", academicPeriodId: "period-2", laboratoryId: "lab-1", teacherId: "user-1", subjectId: "subj-1", weekDay: "MONDAY", startTime: "08:00:00", endTime: "10:00:00", registeredStudentCount: 30, ...stamp },
@@ -208,6 +444,57 @@ function enrich(record) {
     laboratoryName: lab?.name,
     laboratoryCode: lab?.code,
     teacherName: fullName(user),
+  }
+}
+
+// ── Phase 2/3 lookups & summaries ──────────────────────────────────────────
+const stationsOf = (labId) => db.workstations.filter((w) => eqId(w.laboratoryId, labId))
+const equipmentOf = (labId) => db.equipment.filter((e) => eqId(e.laboratoryId, labId))
+const incidentsOf = (labId) => db.incidents.filter((i) => eqId(i.laboratoryId, labId))
+const ACTIVE_INCIDENT = (i) => i.status === "OPEN" || i.status === "IN_PROGRESS"
+
+/** Compact inventory summary for the public status endpoint (null when no stations). */
+function inventorySummaryFor(labId) {
+  const ws = stationsOf(labId)
+  if (!ws.length) return null
+  return {
+    totalWorkstations: ws.length,
+    availableWorkstations: ws.filter((w) => w.status === "AVAILABLE" || w.status === "OCCUPIED").length,
+    underMaintenance: ws.filter((w) => w.status === "UNDER_MAINTENANCE").length,
+    outOfService: ws.filter((w) => w.status === "OUT_OF_SERVICE").length,
+  }
+}
+
+/** Compact incident summary for the public status endpoint. */
+function incidentSummaryFor(labId) {
+  const list = incidentsOf(labId)
+  return {
+    openIncidents: list.filter((i) => i.status === "OPEN").length,
+    criticalIncidents: list.filter((i) => i.priority === "CRITICAL" && ACTIVE_INCIDENT(i)).length,
+    inProgressIncidents: list.filter((i) => i.status === "IN_PROGRESS").length,
+  }
+}
+
+/** Full inventory payload with equipment attached to each workstation. */
+function inventoryResponse(labId) {
+  const ws = stationsOf(labId)
+  const eq = equipmentOf(labId)
+  const workstations = ws.map((w) => ({
+    ...w,
+    equipment: eq.find((e) => eqId(e.workstationId, w.id)) || null,
+  }))
+  const devices = eq.filter((e) => e.workstationId == null)
+  return {
+    laboratoryId: labId,
+    totalWorkstations: ws.length,
+    availableWorkstations: ws.filter((w) => w.status === "AVAILABLE" || w.status === "OCCUPIED").length,
+    underMaintenanceWorkstations: ws.filter((w) => w.status === "UNDER_MAINTENANCE").length,
+    outOfServiceWorkstations: ws.filter((w) => w.status === "OUT_OF_SERVICE").length,
+    totalEquipment: eq.length,
+    operationalEquipment: eq.filter((e) => e.status === "OPERATIONAL").length,
+    underMaintenanceEquipment: eq.filter((e) => e.status === "UNDER_MAINTENANCE").length,
+    workstations,
+    devices,
   }
 }
 
@@ -497,7 +784,124 @@ function route(method, path, query, body) {
     return enrich(s)
   }
 
+  // Workstations --------------------------------------------------------------
+  if (p === "/workstations") {
+    if (method === "GET") {
+      let list = db.workstations
+      if (query.laboratoryId) list = list.filter((w) => eqId(w.laboratoryId, query.laboratoryId))
+      if (query.status) list = list.filter((w) => w.status === query.status)
+      return list
+    }
+    if (method === "POST") return crud("workstations", method, null, body)
+  }
+  m = p.match(/^\/workstations\/([^/]+)\/status$/)
+  if (m && method === "PATCH") {
+    const ws = db.workstations.find((w) => eqId(w.id, m[1]))
+    if (!ws) notFound()
+    ws.status = body.status
+    ws.updatedAt = nowISO()
+    return ws
+  }
+  m = p.match(/^\/workstations\/(.+)$/)
+  if (m) return crud("workstations", method, m[1], body)
+
+  // Equipment -----------------------------------------------------------------
+  if (p === "/equipment") {
+    if (method === "GET") {
+      let list = db.equipment
+      if (query.laboratoryId) list = list.filter((e) => eqId(e.laboratoryId, query.laboratoryId))
+      if (query.workstationId) list = list.filter((e) => eqId(e.workstationId, query.workstationId))
+      return list
+    }
+    if (method === "POST") return crud("equipment", method, null, body)
+  }
+  m = p.match(/^\/equipment\/([^/]+)\/status$/)
+  if (m && method === "PATCH") {
+    const eq = db.equipment.find((e) => eqId(e.id, m[1]))
+    if (!eq) notFound()
+    eq.status = body.status
+    eq.updatedAt = nowISO()
+    return eq
+  }
+  m = p.match(/^\/equipment\/(.+)$/)
+  if (m) return crud("equipment", method, m[1], body)
+
+  // Incidents -----------------------------------------------------------------
+  m = p.match(/^\/incidents\/([^/]+)\/status$/)
+  if (m && method === "PATCH") {
+    const inc = db.incidents.find((i) => eqId(i.id, m[1]))
+    if (!inc) notFound()
+    inc.status = body.status
+    inc.updatedAt = nowISO()
+    return inc
+  }
+  m = p.match(/^\/incidents\/([^/]+)\/actions$/)
+  if (m && method === "PATCH") {
+    const inc = db.incidents.find((i) => eqId(i.id, m[1]))
+    if (!inc) notFound()
+    if (!Array.isArray(inc.actions)) inc.actions = []
+    if (body?.action) inc.actions.push(body.action)
+    inc.updatedAt = nowISO()
+    return inc
+  }
+  if (p === "/incidents") {
+    if (method === "GET") {
+      let list = db.incidents
+      if (query.laboratoryId) list = list.filter((i) => eqId(i.laboratoryId, query.laboratoryId))
+      if (query.status) list = list.filter((i) => i.status === query.status)
+      if (query.priority) list = list.filter((i) => i.priority === query.priority)
+      if (query.type) list = list.filter((i) => i.type === query.type)
+      return [...list].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    }
+    if (method === "POST") {
+      const year = new Date().getFullYear()
+      const nextNum = db.incidents.length + 1
+      const record = {
+        id: uid("inc"),
+        code: `INC-${year}-${String(nextNum).padStart(3, "0")}`,
+        laboratoryId: body.laboratoryId,
+        workstationId: body.workstationId || null,
+        equipmentId: body.equipmentId || null,
+        type: body.type || "INCIDENT",
+        category: body.category || "OTHER",
+        description: body.description || "",
+        status: "OPEN",
+        priority: body.priority || "MEDIUM",
+        reportedBy: body.reportedBy || "System Administrator",
+        actions: [],
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+      }
+      db.incidents.push(record)
+      return record
+    }
+  }
+  m = p.match(/^\/incidents\/(.+)$/)
+  if (m) return crud("incidents", method, m[1], body)
+
   // Public (no auth) ----------------------------------------------------------
+  m = p.match(/^\/public\/laboratories\/([^/]+)\/inventory$/)
+  if (m && method === "GET") {
+    if (!labOf(m[1])) notFound()
+    return inventoryResponse(m[1])
+  }
+  m = p.match(/^\/public\/laboratories\/([^/]+)\/incidents$/)
+  if (m && method === "GET") {
+    if (!labOf(m[1])) notFound()
+    return incidentsOf(m[1])
+      .filter(ACTIVE_INCIDENT)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .map((i) => ({
+        id: i.id,
+        code: i.code,
+        type: i.type,
+        category: i.category,
+        description: i.description,
+        status: i.status,
+        priority: i.priority,
+        createdAt: i.createdAt,
+      }))
+  }
   if (p === "/public/laboratories/status" && method === "GET") {
     const now = nowHM()
     const today = todayISO()
@@ -544,6 +948,8 @@ function route(method, path, query, body) {
         status: lab.status,
         currentSession: buildSession(current, true),
         nextSession: buildSession(next, false),
+        inventorySummary: inventorySummaryFor(lab.id),
+        incidentSummary: incidentSummaryFor(lab.id),
       }
     })
   }
