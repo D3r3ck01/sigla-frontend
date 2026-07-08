@@ -20,6 +20,10 @@ import { TodayScheduleTable } from "./TodayScheduleTable"
 
 const REFRESH_MS = 60000
 
+// Lazy loaders for the expandable card panel (public, no auth).
+const fetchLabInventory = (labId) => publicFetch(`/public/laboratories/${labId}/inventory`)
+const fetchLabIncidents = (labId) => publicFetch(`/public/laboratories/${labId}/incidents`)
+
 function formatFullDate(date) {
   const s = date.toLocaleDateString("es-EC", {
     weekday: "long",
@@ -443,10 +447,10 @@ export function PublicStatusPage() {
         {/* Lab status */}
         <section className="mb-8">
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[#1F2937]">Estado actual de laboratorios</h2>
+            <h2 className="text-xl font-semibold text-[#1F2937]">Clases y aulas ahora mismo</h2>
             <p className="text-sm text-[#6B7280]">
               {lastUpdated
-                ? `Última actualización: ${formatClock(lastUpdated)}`
+                ? `Última actualización: ${formatClock(lastUpdated)} · Los datos se actualizan automáticamente cada 60 segundos`
                 : "Cargando información..."}
             </p>
           </div>
@@ -469,7 +473,12 @@ export function PublicStatusPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredLabs.map((lab) => (
-                <LabStatusCard key={lab.id} lab={lab} />
+                <LabStatusCard
+                  key={lab.id}
+                  lab={lab}
+                  fetchInventory={fetchLabInventory}
+                  fetchIncidents={fetchLabIncidents}
+                />
               ))}
             </div>
           )}
