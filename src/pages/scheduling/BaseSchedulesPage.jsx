@@ -258,13 +258,13 @@ function Row({ hour, slots, catalogs, subjectColor, onCellClick, onSlotClick, on
                     className="block w-full text-left"
                   >
                     <span className="block font-semibold text-foreground">
-                      {s.subjectName || catalogs.subjectName(s.subjectId)}
+                      {catalogs.subjectName(s.subjectId)}
                     </span>
                     <span className="block text-muted-foreground">
                       {formatTime(s.startTime)}–{formatTime(s.endTime)}
                     </span>
                     <span className="block truncate text-muted-foreground">
-                      {s.laboratoryName || catalogs.labName(s.laboratoryId)}
+                      {catalogs.labName(s.laboratoryId)}
                     </span>
                   </button>
                   <button

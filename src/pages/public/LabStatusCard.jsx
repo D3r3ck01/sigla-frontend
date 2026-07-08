@@ -17,8 +17,8 @@ import {
   getInitials,
   getAvatarColor,
   priorityMeta,
+  severityMeta,
   INCIDENT_STATUS_LABEL,
-  CATEGORY_LABEL,
   EQUIPMENT_STATUS_LABEL,
   shortDate,
 } from "../../lib/labUi"
@@ -38,8 +38,9 @@ function occupancyColor(pct) {
  *  - compact: smaller header, no "next class" section (admin dashboard)
  *  - fetchInventory(labId): async → { workstations: [...with equipment], devices: [...] }
  *  - fetchIncidents(labId): async → incident[]
+ *  - categoryName: resolved laboratory category name (backend sends categoryId only)
  */
-export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncidents }) {
+export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncidents, categoryName }) {
   const [expanded, setExpanded] = useState(false)
   const [tab, setTab] = useState("equipment")
   const [inv, setInv] = useState(null)
@@ -48,12 +49,12 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
   const [loadingInc, setLoadingInc] = useState(false)
   const [showAllIncidents, setShowAllIncidents] = useState(false)
 
-  const t = typeMeta(lab.type)
+  const t = typeMeta(categoryName)
   const TypeIcon = t.Icon
   const { bg, badge } = headerStyle(lab)
   const session = lab.currentSession
   const next = lab.nextSession
-  const canEquip = hasEquipment(lab.type)
+  const canEquip = hasEquipment(categoryName)
   const iconSize = compact ? 32 : 40
 
   const invSummary = lab.inventorySummary
@@ -333,11 +334,11 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                           <p className="mb-1.5 text-xs font-semibold text-[#334155]">Equipos de red</p>
                           <ul className="space-y-1.5">
                             {inv.devices.map((d) => (
-                              <li key={d.id} className="flex items-center gap-2 text-xs text-[#475569]">
+                              <li key={d.id} className="flex flex-wrap items-center gap-2 text-xs text-[#475569]">
                                 <Router className="h-3.5 w-3.5 shrink-0 text-[#7C3AED]" aria-hidden="true" />
-                                <span className="font-medium">
-                                  {d.brand} {d.model}
-                                </span>
+                                <span className="font-mono text-[#334155]">{d.code}</span>
+                                <span className="font-medium">{d.name}</span>
+                                {d.categoryName && <span className="text-[#94A3B8]">· {d.categoryName}</span>}
                                 <span className="text-[#94A3B8]">
                                   · {EQUIPMENT_STATUS_LABEL[d.status] || d.status}
                                 </span>
@@ -386,7 +387,7 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                               </span>
                               <span className="text-xs font-medium text-[#334155]">{inc.code}</span>
                               <span className="text-xs text-[#94A3B8]">
-                                · {shortDate(inc.createdAt)} · {CATEGORY_LABEL[inc.category] || inc.category}
+                                · {shortDate(inc.createdAt)} · {severityMeta(inc.severity).label}
                               </span>
                             </div>
                             <p className="text-sm text-[#475569]">{inc.description}</p>

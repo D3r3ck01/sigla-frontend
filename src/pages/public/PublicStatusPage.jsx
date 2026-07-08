@@ -93,6 +93,7 @@ export function PublicStatusPage() {
   const [allSubjects, setAllSubjects] = useState([])
   const [faculties, setFaculties] = useState([])
   const [programs, setPrograms] = useState([])
+  const [categories, setCategories] = useState([])
 
   const [facultyId, setFacultyId] = useState("")
   const [programId, setProgramId] = useState("")
@@ -130,14 +131,17 @@ export function PublicStatusPage() {
     }
   }
 
-  // Load filter catalogs once (public, no auth in demo mode).
+  // Load filter catalogs once (public, no auth).
   useEffect(() => {
-    publicFetch("/faculties")
+    publicFetch("/public/faculties")
       .then((d) => setFaculties(Array.isArray(d) ? d : []))
       .catch(() => setFaculties([]))
-    publicFetch("/subjects")
+    publicFetch("/public/subjects")
       .then((d) => setAllSubjects(Array.isArray(d) ? d : []))
       .catch(() => setAllSubjects([]))
+    publicFetch("/public/laboratory-categories")
+      .then((d) => setCategories(Array.isArray(d) ? d : []))
+      .catch(() => setCategories([]))
   }, [])
 
   // Cascading academic programs when a faculty is selected.
@@ -147,7 +151,7 @@ export function PublicStatusPage() {
       setProgramId("")
       return
     }
-    publicFetch(`/faculties/${facultyId}/academic-programs`)
+    publicFetch(`/public/faculties/${facultyId}/academic-programs`)
       .then((d) => setPrograms(Array.isArray(d) ? d : []))
       .catch(() => setPrograms([]))
   }, [facultyId])
@@ -185,6 +189,13 @@ export function PublicStatusPage() {
     for (const s of allSubjects) map.set(s.id, s.academicProgramId)
     return map
   }, [allSubjects])
+
+  // Map laboratory category id → name (backend labs only carry categoryId).
+  const categoryNameFor = useMemo(() => {
+    const map = new Map()
+    for (const c of categories) map.set(String(c.id), c.name)
+    return (id) => map.get(String(id))
+  }, [categories])
 
   // Labs filtered by faculty (academic program does not affect lab cards / KPIs).
   const filteredLabs = useMemo(() => {
@@ -476,6 +487,7 @@ export function PublicStatusPage() {
                 <LabStatusCard
                   key={lab.id}
                   lab={lab}
+                  categoryName={categoryNameFor(lab.categoryId)}
                   fetchInventory={fetchLabInventory}
                   fetchIncidents={fetchLabIncidents}
                 />

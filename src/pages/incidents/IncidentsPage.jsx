@@ -1,20 +1,15 @@
 import { useCallback, useMemo, useState } from "react"
-import { Plus, ChevronDown, Play, Check, User, Send } from "lucide-react"
+import { Plus, ChevronDown, Play, Check } from "lucide-react"
 import { api } from "../../lib/api"
 import { useAsync, asList } from "../../lib/useAsync"
 import { useToast } from "../../context/ToastContext"
+import { useCatalogs } from "../../lib/catalogs"
 import { PageHeader } from "../../components/PageHeader"
 import { Card, CardBody } from "../../components/Card"
 import { Button } from "../../components/Button"
 import { Field, Select, Textarea } from "../../components/Field"
 import { IncidentFormModal } from "./IncidentFormModal"
-import {
-  priorityMeta,
-  INCIDENT_STATUS_LABEL,
-  INCIDENT_TYPE_LABEL,
-  CATEGORY_LABEL,
-  relativeTime,
-} from "../../lib/labUi"
+import { priorityMeta, severityMeta, INCIDENT_STATUS_LABEL, relativeTime } from "../../lib/labUi"
 
 const STATUS_OPTIONS = [
   { value: "OPEN", label: "Abierta" },
@@ -30,11 +25,6 @@ const PRIORITY_OPTIONS = [
   { value: "LOW", label: "Baja" },
 ]
 
-const TYPE_OPTIONS = [
-  { value: "INCIDENT", label: "Incidencia" },
-  { value: "REQUEST", label: "Solicitud" },
-]
-
 function PriorityBadge({ priority }) {
   const pm = priorityMeta(priority)
   return (
@@ -43,6 +33,18 @@ function PriorityBadge({ priority }) {
       style={{ backgroundColor: pm.bg, color: pm.fg }}
     >
       {pm.label}
+    </span>
+  )
+}
+
+function SeverityBadge({ severity }) {
+  const sm = severityMeta(severity)
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+      style={{ backgroundColor: sm.bg, color: sm.fg }}
+    >
+      {sm.label}
     </span>
   )
 }
@@ -64,17 +66,19 @@ function StatusChip({ status }) {
   )
 }
 
-function IncidentRow({ incident, labName, onChanged }) {
+function IncidentRow({ incident, labName, typeName, onChanged }) {
   const toast = useToast()
   const [expanded, setExpanded] = useState(false)
-  const [actionText, setActionText] = useState("")
+  const [solutionText, setSolutionText] = useState(incident.solution || "")
   const [statusDraft, setStatusDraft] = useState(incident.status)
   const [busy, setBusy] = useState(false)
 
-  async function patchStatus(status) {
+  async function patchStatus(status, solution) {
     setBusy(true)
     try {
-      await api.patch(`/incidents/${incident.id}/status`, { status })
+      const body = { status }
+      if (solution !== undefined) body.solution = solution
+      await api.patch(`/incidents/${incident.id}/status`, body)
       toast.success("Estado actualizado.")
       onChanged?.()
     } catch (err) {
@@ -84,27 +88,10 @@ function IncidentRow({ incident, labName, onChanged }) {
     }
   }
 
-  async function addAction() {
-    if (!actionText.trim()) return
-    setBusy(true)
-    try {
-      await api.patch(`/incidents/${incident.id}/actions`, { action: actionText.trim() })
-      setActionText("")
-      toast.success("Acción registrada.")
-      onChanged?.()
-    } catch (err) {
-      toast.error(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function saveStatusDraft() {
-    if (statusDraft === incident.status) return
-    await patchStatus(statusDraft)
+    if (statusDraft === incident.status && solutionText === (incident.solution || "")) return
+    await patchStatus(statusDraft, solutionText.trim() || null)
   }
-
-  const actions = Array.isArray(incident.actions) ? incident.actions : []
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -112,27 +99,22 @@ function IncidentRow({ incident, labName, onChanged }) {
         <div className="min-w-0">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <PriorityBadge priority={incident.priority} />
+            <SeverityBadge severity={incident.severity} />
             <span className="text-sm font-semibold text-foreground">
               {incident.code} &mdash; {labName}
             </span>
           </div>
           <p className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span>{CATEGORY_LABEL[incident.category] || incident.category}</span>
-            <span>·</span>
-            <span>{INCIDENT_TYPE_LABEL[incident.type] || incident.type}</span>
+            <span>{typeName}</span>
             <span>·</span>
             <span>{relativeTime(incident.createdAt)}</span>
-            {incident.reportedBy && (
-              <>
-                <span>·</span>
-                <span className="inline-flex items-center gap-1">
-                  <User className="h-3 w-3" aria-hidden="true" />
-                  {incident.reportedBy}
-                </span>
-              </>
-            )}
           </p>
           <p className="text-sm text-foreground">{incident.description}</p>
+          {incident.solution && (
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Solución:</span> {incident.solution}
+            </p>
+          )}
           <div className="mt-2">
             <StatusChip status={incident.status} />
           </div>
@@ -146,7 +128,12 @@ function IncidentRow({ incident, labName, onChanged }) {
             </Button>
           )}
           {(incident.status === "OPEN" || incident.status === "IN_PROGRESS") && (
-            <Button size="sm" variant="success" loading={busy} onClick={() => patchStatus("RESOLVED")}>
+            <Button
+              size="sm"
+              variant="success"
+              loading={busy}
+              onClick={() => patchStatus("RESOLVED", solutionText.trim() || null)}
+            >
               <Check className="h-3.5 w-3.5" />
               Resolver
             </Button>
@@ -168,43 +155,16 @@ function IncidentRow({ incident, labName, onChanged }) {
 
       {expanded && (
         <div className="space-y-4 border-t border-border bg-muted/30 p-4">
-          {/* Action history */}
+          {/* Solution note */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Historial de acciones
-            </p>
-            {actions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aún no se han registrado acciones.</p>
-            ) : (
-              <ol className="space-y-2">
-                {actions.map((a, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-foreground">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                      {i + 1}
-                    </span>
-                    <span className="leading-relaxed">{a}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-
-          {/* Add action */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Field label="Registrar nueva acción">
-                <Textarea
-                  rows={2}
-                  placeholder="Describe la acción realizada…"
-                  value={actionText}
-                  onChange={(e) => setActionText(e.target.value)}
-                />
-              </Field>
-            </div>
-            <Button size="md" loading={busy} disabled={!actionText.trim()} onClick={addAction}>
-              <Send className="h-4 w-4" />
-              Registrar acción
-            </Button>
+            <Field label="Solución / nota de resolución">
+              <Textarea
+                rows={2}
+                placeholder="Describe la solución aplicada…"
+                value={solutionText}
+                onChange={(e) => setSolutionText(e.target.value)}
+              />
+            </Field>
           </div>
 
           {/* Status update */}
@@ -223,10 +183,10 @@ function IncidentRow({ incident, labName, onChanged }) {
             <Button
               variant="secondary"
               loading={busy}
-              disabled={statusDraft === incident.status}
+              disabled={statusDraft === incident.status && solutionText === (incident.solution || "")}
               onClick={saveStatusDraft}
             >
-              Guardar estado
+              Guardar cambios
             </Button>
           </div>
         </div>
@@ -239,8 +199,10 @@ export function IncidentsPage() {
   const [labId, setLabId] = useState("")
   const [status, setStatus] = useState("")
   const [priority, setPriority] = useState("")
-  const [type, setType] = useState("")
+  const [typeId, setTypeId] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
+
+  const catalogs = useCatalogs()
 
   const { data: labsData } = useAsync(() => api.get("/laboratories"), [])
   const labs = asList(labsData)
@@ -261,10 +223,10 @@ export function IncidentsPage() {
       if (labId && String(i.laboratoryId) !== String(labId)) return false
       if (status && i.status !== status) return false
       if (priority && i.priority !== priority) return false
-      if (type && i.type !== type) return false
+      if (typeId && String(i.typeId) !== String(typeId)) return false
       return true
     })
-  }, [incidents, labId, status, priority, type])
+  }, [incidents, labId, status, priority, typeId])
 
   return (
     <div>
@@ -313,11 +275,11 @@ export function IncidentsPage() {
             </Select>
           </Field>
           <Field label="Tipo">
-            <Select value={type} onChange={(e) => setType(e.target.value)}>
+            <Select value={typeId} onChange={(e) => setTypeId(e.target.value)}>
               <option value="">Todos</option>
-              {TYPE_OPTIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {catalogs.incidentTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </Select>
@@ -345,6 +307,7 @@ export function IncidentsPage() {
               key={inc.id}
               incident={inc}
               labName={labName(inc.laboratoryId)}
+              typeName={catalogs.incidentTypeName(inc.typeId)}
               onChanged={refetch}
             />
           ))}

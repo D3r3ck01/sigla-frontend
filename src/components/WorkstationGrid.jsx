@@ -42,13 +42,12 @@ export function WorkstationGrid({ workstations = [], onSelect, cell = 28 }) {
               {eq ? (
                 <>
                   <p className="text-white/90">
-                    {eq.brand} {eq.model}
+                    {eq.categoryName ? `${eq.categoryName} — ` : ""}
+                    {EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}
                   </p>
-                  {eq.cpu && <p className="text-white/70">{eq.cpu}</p>}
-                  {eq.ram && <p className="text-white/70">{eq.ram} RAM</p>}
-                  {eq.storage && <p className="text-white/70">{eq.storage}</p>}
-                  <p className="mt-0.5 text-white/70">
-                    Equipo: {EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}
+                  <p className="text-white/70">
+                    <span className="font-mono">{eq.code}</span>
+                    {eq.name ? `: ${eq.name}` : ""}
                   </p>
                 </>
               ) : (

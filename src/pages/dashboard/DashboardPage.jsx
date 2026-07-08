@@ -25,6 +25,7 @@ import { StatusBadge } from "../../components/Badge"
 import { Select } from "../../components/Field"
 import { formatTime } from "../../lib/utils"
 import { LabStatusCard } from "../public/LabStatusCard"
+import { useCatalogs } from "../../lib/catalogs"
 import { priorityMeta, relativeTime } from "../../lib/labUi"
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -33,8 +34,8 @@ const ACTIVE = (i) => i.status === "OPEN" || i.status === "IN_PROGRESS"
 // Lazy loaders for the card's expandable panel (admin, authenticated).
 async function fetchLabInventory(labId) {
   const [wsData, eqData] = await Promise.all([
-    api.get(`/workstations?laboratoryId=${labId}`).catch(() => []),
-    api.get(`/equipment?laboratoryId=${labId}`).catch(() => []),
+    api.get(`/laboratories/${labId}/workstations`).catch(() => []),
+    api.get(`/laboratories/${labId}/equipment`).catch(() => []),
   ])
   const equipment = asList(eqData)
   const workstations = asList(wsData).map((w) => ({
@@ -46,35 +47,38 @@ async function fetchLabInventory(labId) {
 }
 
 async function fetchLabIncidents(labId) {
-  const list = await api.get(`/incidents?laboratoryId=${labId}`).catch(() => [])
+  const list = await api.get(`/laboratories/${labId}/incidents`).catch(() => [])
   return asList(list).filter(ACTIVE)
 }
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const { selectedId: academicPeriodId, selected } = usePeriod()
+  const catalogs = useCatalogs()
 
   const [facultyId, setFacultyId] = useState("")
   const [programId, setProgramId] = useState("")
   const [careersByFaculty, setCareersByFaculty] = useState([])
 
   const loadAll = useCallback(async () => {
-    const [faculties, labs, subjects, sessions, openInc, progInc] = await Promise.all([
+    const [faculties, labs, subjects, sessions, incidents] = await Promise.all([
       api.get("/faculties").catch(() => []),
       api.get("/laboratories").catch(() => []),
       api.get("/subjects").catch(() => []),
-      academicPeriodId
-        ? api.get(`/sessions?academicPeriodId=${academicPeriodId}&date=${todayISO()}`).catch(() => [])
-        : Promise.resolve([]),
-      api.get("/incidents?status=OPEN").catch(() => []),
-      api.get("/incidents?status=IN_PROGRESS").catch(() => []),
+      // Backend only supports ?date= for sessions; filter by period client-side.
+      api.get(`/sessions?date=${todayISO()}`).catch(() => []),
+      // Fetch all incidents and filter for active ones client-side.
+      api.get("/incidents").catch(() => []),
     ])
+    const todaySessions = academicPeriodId
+      ? asList(sessions).filter((s) => String(s.academicPeriodId) === String(academicPeriodId))
+      : asList(sessions)
     return {
       allFaculties: asList(faculties),
       allLabs: asList(labs),
       allSubjects: asList(subjects),
-      todaySessions: asList(sessions),
-      activeIncidents: [...asList(openInc), ...asList(progInc)],
+      todaySessions,
+      activeIncidents: asList(incidents).filter(ACTIVE),
     }
   }, [academicPeriodId])
 
@@ -161,8 +165,8 @@ export function DashboardPage() {
       )
       const currentSession = current
         ? {
-            subject: current.subjectName || "Materia",
-            teacher: current.teacherName || "Docente",
+            subject: catalogs.subjectName(current.subjectId),
+            teacher: catalogs.teacherName(current.teacherId),
             startTime: formatTime(current.startTime),
             endTime: formatTime(current.endTime),
             totalStudents: current.registeredStudentCount ?? 0,
@@ -171,7 +175,7 @@ export function DashboardPage() {
       return { ...lab, currentSession, inventorySummary: null, incidentSummary: incidentSummaryFor(lab.id) }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredLabs, filteredSessions, incidentsByLab])
+  }, [filteredLabs, filteredSessions, incidentsByLab, catalogs])
 
   // Operational alerts: HIGH + CRITICAL active incidents (max 5).
   const alerts = useMemo(() => {
@@ -378,6 +382,7 @@ export function DashboardPage() {
                 key={lab.id}
                 lab={lab}
                 compact
+                categoryName={catalogs.categoryName(lab.categoryId)}
                 fetchInventory={fetchLabInventory}
                 fetchIncidents={fetchLabIncidents}
               />
@@ -413,14 +418,14 @@ export function DashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
-                      {s.subjectName || "Materia"}
+                      {catalogs.subjectName(s.subjectId)}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {s.laboratoryName || s.laboratoryCode || "Laboratorio"}
+                      {catalogs.labName(s.laboratoryId)}
                       {" · "}
                       <span className="inline-flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        {s.teacherName || "Docente"}
+                        {catalogs.teacherName(s.teacherId)}
                       </span>
                     </p>
                   </div>

@@ -15,13 +15,26 @@ export const TYPE_META = {
   OTHER: { Icon: Building2, bg: "#F3F4F6", fg: "#6B7280", label: "Otro" },
 }
 
-export function typeMeta(type) {
-  return TYPE_META[type] || TYPE_META.OTHER
+/**
+ * Resolves visual metadata from a laboratory *category name* (the backend no
+ * longer sends a `type` enum — categories are loaded dynamically). Matches the
+ * known category names, falling back to keyword detection then OTHER.
+ */
+export function typeMeta(categoryName) {
+  if (!categoryName) return TYPE_META.OTHER
+  const key = String(categoryName).toUpperCase()
+  if (TYPE_META[key]) return TYPE_META[key]
+  if (key.includes("COMPUT") || key.includes("CÓMPUT")) return TYPE_META.COMPUTING
+  if (key.includes("NETWORK") || key.includes("RED")) return TYPE_META.NETWORKS
+  if (key.includes("INDUSTR") || key.includes("INFRA")) return TYPE_META.INDUSTRIAL
+  if (key.includes("THEOR") || key.includes("TEOR") || key.includes("AULA")) return TYPE_META.THEORETICAL
+  return TYPE_META.OTHER
 }
 
-// Labs that keep workstation equipment.
-export function hasEquipment(type) {
-  return type === "COMPUTING" || type === "NETWORKS"
+// Labs that keep workstation equipment (accepts a category name).
+export function hasEquipment(categoryName) {
+  const meta = typeMeta(categoryName)
+  return meta === TYPE_META.COMPUTING || meta === TYPE_META.NETWORKS
 }
 
 // ── Header color by room status ──────────────────────────────────────────────
@@ -49,22 +62,24 @@ export function getAvatarColor(name) {
 }
 
 // ── Workstation status → grid cell colors + Spanish label ────────────────────
+// Backend enum: ACTIVE | INACTIVE | UNDER_MAINTENANCE
 export const WS_STATUS_META = {
-  AVAILABLE: { label: "Disponible", bg: "#DCFCE7", border: "#86EFAC", dot: "#16A34A" },
-  OCCUPIED: { label: "Ocupada", bg: "#DBEAFE", border: "#93C5FD", dot: "#1D4ED8" },
+  ACTIVE: { label: "Activa", bg: "#DCFCE7", border: "#86EFAC", dot: "#16A34A" },
   UNDER_MAINTENANCE: { label: "Mantenimiento", bg: "#FEF3C7", border: "#FCD34D", dot: "#D97706" },
-  OUT_OF_SERVICE: { label: "Fuera de servicio", bg: "#FEE2E2", border: "#FCA5A5", dot: "#DC2626" },
+  INACTIVE: { label: "Inactiva", bg: "#FEE2E2", border: "#FCA5A5", dot: "#DC2626" },
 }
 
 export function wsStatusMeta(status) {
-  return WS_STATUS_META[status] || WS_STATUS_META.AVAILABLE
+  return WS_STATUS_META[status] || WS_STATUS_META.ACTIVE
 }
 
 // ── Equipment status → Spanish label ─────────────────────────────────────────
+// Backend enum: ACTIVE | INACTIVE | DAMAGED | UNDER_MAINTENANCE
 export const EQUIPMENT_STATUS_LABEL = {
-  OPERATIONAL: "Operativo",
+  ACTIVE: "Activo",
+  INACTIVE: "Inactivo",
+  DAMAGED: "Dañado",
   UNDER_MAINTENANCE: "En mantenimiento",
-  OUT_OF_SERVICE: "Fuera de servicio",
 }
 
 // ── Incident priority → colors + Spanish label ───────────────────────────────
@@ -87,18 +102,22 @@ export const INCIDENT_STATUS_LABEL = {
   CLOSED: "Cerrada",
 }
 
-// ── Incident category / type → Spanish label ─────────────────────────────────
-export const CATEGORY_LABEL = {
-  HARDWARE: "Hardware",
-  SOFTWARE: "Software",
-  NETWORKING: "Redes",
-  INFRASTRUCTURE: "Infraestructura",
-  OTHER: "Otro",
+// ── Incident severity → colors + Spanish label ───────────────────────────────
+// Backend enum: MINOR | MAJOR | CRITICAL
+export const SEVERITY_META = {
+  CRITICAL: { label: "Crítica", bg: "#FEE2E2", fg: "#B91C1C" },
+  MAJOR: { label: "Mayor", bg: "#FFEDD5", fg: "#C2410C" },
+  MINOR: { label: "Menor", bg: "#F3F4F6", fg: "#4B5563" },
 }
 
-export const INCIDENT_TYPE_LABEL = {
-  INCIDENT: "Incidencia",
-  REQUEST: "Solicitud",
+export const SEVERITY_LABEL = {
+  MINOR: "Menor",
+  MAJOR: "Mayor",
+  CRITICAL: "Crítica",
+}
+
+export function severityMeta(severity) {
+  return SEVERITY_META[severity] || SEVERITY_META.MINOR
 }
 
 export function isActiveIncident(i) {

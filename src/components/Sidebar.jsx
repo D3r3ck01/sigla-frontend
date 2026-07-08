@@ -36,11 +36,12 @@ export function Sidebar({ open, onNavigate }) {
     let active = true
     async function loadCount() {
       try {
-        const [open, inProgress] = await Promise.all([
-          api.get("/incidents?status=OPEN").catch(() => []),
-          api.get("/incidents?status=IN_PROGRESS").catch(() => []),
-        ])
-        if (active) setIncidentCount(asList(open).length + asList(inProgress).length)
+        // Fetch all incidents and count active ones (OPEN + IN_PROGRESS) client-side.
+        const all = await api.get("/incidents").catch(() => [])
+        const activeCount = asList(all).filter(
+          (i) => i.status === "OPEN" || i.status === "IN_PROGRESS",
+        ).length
+        if (active) setIncidentCount(activeCount)
       } catch {
         /* keep last known count */
       }

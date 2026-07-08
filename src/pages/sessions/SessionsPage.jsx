@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
   CalendarDays,
   Clock,
@@ -46,22 +46,24 @@ export function SessionsPage() {
   const [toCancel, setToCancel] = useState(null)
   const [canceling, setCanceling] = useState(false)
 
+  // The backend only supports the ?date= query param for /sessions. We send that
+  // when present and filter by period/status/laboratory client-side (works in
+  // both mock and real-backend modes).
   const load = useCallback(() => {
     if (!academicPeriodId) return Promise.resolve([])
-    const qs = new URLSearchParams({ academicPeriodId: String(academicPeriodId) })
-    if (filters.status) qs.set("status", filters.status)
-    if (filters.laboratoryId) qs.set("laboratoryId", filters.laboratoryId)
-    if (filters.date) qs.set("date", filters.date)
-    return api.get(`/sessions?${qs.toString()}`)
-  }, [academicPeriodId, filters.status, filters.laboratoryId, filters.date])
+    return api.get(filters.date ? `/sessions?date=${filters.date}` : "/sessions")
+  }, [academicPeriodId, filters.date])
 
-  const { data, loading, refetch } = useAsync(load, [
-    academicPeriodId,
-    filters.status,
-    filters.laboratoryId,
-    filters.date,
-  ])
-  const sessions = asList(data)
+  const { data, loading, refetch } = useAsync(load, [academicPeriodId, filters.date])
+
+  const sessions = useMemo(() => {
+    return asList(data).filter((s) => {
+      if (academicPeriodId && String(s.academicPeriodId) !== String(academicPeriodId)) return false
+      if (filters.status && s.status !== filters.status) return false
+      if (filters.laboratoryId && String(s.laboratoryId) !== String(filters.laboratoryId)) return false
+      return true
+    })
+  }, [data, academicPeriodId, filters.status, filters.laboratoryId])
 
   function setFilter(field, val) {
     setFilters((f) => ({ ...f, [field]: val }))
@@ -216,7 +218,7 @@ function SessionCard({ session: s, catalogs, busy, onStart, onComplete, onCancel
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate font-semibold text-foreground">
-              {s.subjectName || catalogs.subjectName(s.subjectId)}
+              {catalogs.subjectName(s.subjectId)}
             </h3>
             <StatusBadge value={s.status} />
             {attendance && <StatusBadge value={attendance} />}
@@ -230,11 +232,11 @@ function SessionCard({ session: s, catalogs, busy, onStart, onComplete, onCancel
               <Clock className="h-3.5 w-3.5" />
               {formatTime(s.startTime)}–{formatTime(s.endTime)}
             </span>
-            <span>{s.laboratoryName || catalogs.labName(s.laboratoryId)}</span>
+            <span>{catalogs.labName(s.laboratoryId)}</span>
           </p>
           <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted-foreground">
             <User className="h-3.5 w-3.5" />
-            {s.teacherName || catalogs.teacherName(s.teacherId)}
+            {catalogs.teacherName(s.teacherId)}
           </p>
         </div>
 

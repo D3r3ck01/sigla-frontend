@@ -2,18 +2,24 @@ import { useCallback } from "react"
 import { api } from "./api"
 import { useAsync, asList } from "./useAsync"
 
-/** Loads subjects, teachers (users with role TEACHER) and laboratories used across scheduling & sessions forms. */
+/** Loads subjects, teachers, laboratories and the category/type catalogs used across the admin UI. */
 export function useCatalogs() {
   const load = useCallback(async () => {
-    const [subjects, users, labs] = await Promise.all([
+    const [subjects, users, labs, labCats, equipCats, incTypes] = await Promise.all([
       api.get("/subjects").catch(() => []),
       api.get("/users?role=TEACHER").catch(() => []),
       api.get("/laboratories").catch(() => []),
+      api.get("/laboratory-categories").catch(() => []),
+      api.get("/equipment-categories").catch(() => []),
+      api.get("/incident-types").catch(() => []),
     ])
     return {
       subjects: asList(subjects),
       teachers: asList(users).filter((u) => u.role === "TEACHER"),
       laboratories: asList(labs),
+      labCategories: asList(labCats),
+      equipCategories: asList(equipCats),
+      incidentTypes: asList(incTypes),
     }
   }, [])
 
@@ -22,6 +28,9 @@ export function useCatalogs() {
   const subjects = data?.subjects || []
   const teachers = data?.teachers || []
   const laboratories = data?.laboratories || []
+  const labCategories = data?.labCategories || []
+  const equipCategories = data?.equipCategories || []
+  const incidentTypes = data?.incidentTypes || []
 
   const subjectName = (id) => subjects.find((s) => s.id === id)?.name || id || "—"
   const teacherName = (id) => {
@@ -30,8 +39,26 @@ export function useCatalogs() {
   }
   const labName = (id) => laboratories.find((l) => l.id === id)?.name || id || "—"
   const labCode = (id) => laboratories.find((l) => l.id === id)?.code || ""
+  const categoryName = (id) => labCategories.find((c) => c.id === id)?.name || "—"
+  const equipCategoryName = (id) => equipCategories.find((c) => c.id === id)?.name || "—"
+  const incidentTypeName = (id) => incidentTypes.find((t) => t.id === id)?.name || "—"
 
-  return { subjects, teachers, laboratories, subjectName, teacherName, labName, labCode, loading }
+  return {
+    subjects,
+    teachers,
+    laboratories,
+    labCategories,
+    equipCategories,
+    incidentTypes,
+    subjectName,
+    teacherName,
+    labName,
+    labCode,
+    categoryName,
+    equipCategoryName,
+    incidentTypeName,
+    loading,
+  }
 }
 
 export const DAYS = [

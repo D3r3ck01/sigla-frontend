@@ -18,12 +18,15 @@ export function Topbar({ onMenuClick }) {
     return () => document.removeEventListener("mousedown", onClick)
   }, [])
 
-  // Be resilient to different backend user shapes (name/lastname, nombre/apellido, email).
-  const firstName = user?.name || user?.nombre || ""
-  const lastName = user?.lastname || user?.apellido || ""
+  // Be resilient to different backend user shapes. The real backend returns
+  // UserResponse ({ firstName, lastName, role }); older shapes are kept as fallbacks.
+  const firstName = user?.firstName || user?.name || user?.nombre || ""
+  const lastName = user?.lastName || user?.lastname || user?.apellido || ""
   const displayName =
     `${firstName} ${lastName}`.trim() || user?.fullName || user?.nombreCompleto || user?.email || "Usuario"
-  const role = user?.role || user?.rol || ""
+  const ROLE_LABEL = { ADMIN: "Administrador", TEACHER: "Docente" }
+  const rawRole = user?.role || user?.rol || ""
+  const role = ROLE_LABEL[rawRole] || rawRole
   const initials =
     (`${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase() ||
       (displayName[0] || "").toUpperCase() ||

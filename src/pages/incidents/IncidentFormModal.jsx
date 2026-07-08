@@ -6,17 +6,10 @@ import { Modal } from "../../components/Modal"
 import { Button } from "../../components/Button"
 import { Field, Select, Textarea } from "../../components/Field"
 
-const TYPES = [
-  { value: "INCIDENT", label: "Incidencia" },
-  { value: "REQUEST", label: "Solicitud" },
-]
-
-const CATEGORIES = [
-  { value: "HARDWARE", label: "Hardware" },
-  { value: "SOFTWARE", label: "Software" },
-  { value: "NETWORKING", label: "Redes" },
-  { value: "INFRASTRUCTURE", label: "Infraestructura" },
-  { value: "OTHER", label: "Otro" },
+const SEVERITIES = [
+  { value: "MINOR", label: "Menor" },
+  { value: "MAJOR", label: "Mayor" },
+  { value: "CRITICAL", label: "Crítica" },
 ]
 
 const PRIORITIES = [
@@ -31,8 +24,8 @@ function blankForm(initial = {}) {
     laboratoryId: initial.laboratoryId || "",
     workstationId: initial.workstationId || "",
     equipmentId: initial.equipmentId || "",
-    type: initial.type || "INCIDENT",
-    category: initial.category || "HARDWARE",
+    typeId: initial.typeId || "",
+    severity: initial.severity || "MINOR",
     description: initial.description || "",
     priority: initial.priority || "MEDIUM",
   }
@@ -52,6 +45,7 @@ export function IncidentFormModal({ open, onClose, onCreated, labs = [], initial
   const [form, setForm] = useState(() => blankForm(initial))
   const [workstations, setWorkstations] = useState([])
   const [equipment, setEquipment] = useState([])
+  const [incidentTypes, setIncidentTypes] = useState([])
   const [saving, setSaving] = useState(false)
 
   // Reset the form each time the modal opens (picking up new prefilled values).
@@ -59,6 +53,25 @@ export function IncidentFormModal({ open, onClose, onCreated, labs = [], initial
     if (open) setForm(blankForm(initial))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial.laboratoryId, initial.workstationId, initial.equipmentId])
+
+  // Load incident types once the modal opens.
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    api
+      .get("/incident-types")
+      .catch(() => [])
+      .then((types) => {
+        if (!active) return
+        const list = asList(types)
+        setIncidentTypes(list)
+        // Default typeId to the first available type if none selected yet.
+        setForm((f) => (f.typeId ? f : { ...f, typeId: list[0]?.id || "" }))
+      })
+    return () => {
+      active = false
+    }
+  }, [open])
 
   // Load workstations + equipment whenever the selected lab changes.
   useEffect(() => {
@@ -69,8 +82,8 @@ export function IncidentFormModal({ open, onClose, onCreated, labs = [], initial
     }
     let active = true
     Promise.all([
-      api.get(`/workstations?laboratoryId=${form.laboratoryId}`).catch(() => []),
-      api.get(`/equipment?laboratoryId=${form.laboratoryId}`).catch(() => []),
+      api.get(`/laboratories/${form.laboratoryId}/workstations`).catch(() => []),
+      api.get(`/laboratories/${form.laboratoryId}/equipment`).catch(() => []),
     ]).then(([ws, eq]) => {
       if (!active) return
       setWorkstations(asList(ws))
@@ -94,8 +107,8 @@ export function IncidentFormModal({ open, onClose, onCreated, labs = [], initial
         laboratoryId: form.laboratoryId,
         workstationId: form.workstationId || null,
         equipmentId: form.equipmentId || null,
-        type: form.type,
-        category: form.category,
+        typeId: form.typeId || null,
+        severity: form.severity,
         description: form.description.trim(),
         priority: form.priority,
       })
@@ -170,7 +183,7 @@ export function IncidentFormModal({ open, onClose, onCreated, labs = [], initial
               <option value="">Sin equipo específico</option>
               {equipment.map((eq) => (
                 <option key={eq.id} value={eq.id}>
-                  {eq.brand} {eq.model}
+                  {eq.code} — {eq.name}
                 </option>
               ))}
             </Select>
@@ -179,19 +192,20 @@ export function IncidentFormModal({ open, onClose, onCreated, labs = [], initial
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Tipo" required>
-            <Select value={form.type} onChange={(e) => set("type", e.target.value)}>
-              {TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+            <Select required value={form.typeId} onChange={(e) => set("typeId", e.target.value)}>
+              <option value="">Selecciona un tipo…</option>
+              {incidentTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Categoría" required>
-            <Select value={form.category} onChange={(e) => set("category", e.target.value)}>
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
+          <Field label="Severidad" required>
+            <Select value={form.severity} onChange={(e) => set("severity", e.target.value)}>
+              {SEVERITIES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </Select>
