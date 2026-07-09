@@ -21,6 +21,7 @@ import {
   INCIDENT_STATUS_LABEL,
   EQUIPMENT_STATUS_LABEL,
   shortDate,
+  wsStatusMeta,
 } from "../../lib/labUi"
 import { WorkstationGrid, WorkstationLegend } from "../../components/WorkstationGrid"
 import { Modal } from "../../components/Modal"
@@ -51,6 +52,7 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
   const [loadingInv, setLoadingInv] = useState(false)
   const [loadingInc, setLoadingInc] = useState(false)
   const [showAllIncidents, setShowAllIncidents] = useState(false)
+  const [selectedWs, setSelectedWs] = useState(null)
 
   const t = typeMeta(categoryName)
   const TypeIcon = t.Icon
@@ -117,7 +119,7 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
     : []
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+    <article className="flex flex-col rounded-xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
       {/* ── Layer 1: Room identity header ─────────────────────────────── */}
       <header className={`px-4 text-white ${compact ? "py-2.5" : "py-3"}`} style={{ backgroundColor: bg }}>
         <div className="flex items-start justify-between gap-2">
@@ -297,11 +299,10 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
       {/* ── Expandable panel ──────────────────────────────────────────── */}
       {showFooter && (
         <div
-          className={`grid transition-all duration-300 ease-in-out ${
-            expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          className={`overflow-y-auto transition-all duration-300 ease-in-out ${
+            expanded ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
           }`}
         >
-          <div className="overflow-hidden">
             <div className="border-t border-[#E5E7EB] bg-[#F8FAFC] p-4">
               {/* Tabs */}
               <div className="mb-3 flex gap-1 rounded-lg bg-[#E2E8F0] p-1">
@@ -338,7 +339,10 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                     </div>
                   ) : (
                     <>
-                      <WorkstationGrid workstations={inv.workstations} />
+                      <WorkstationGrid
+                        workstations={inv.workstations}
+                        onSelect={(ws) => setSelectedWs(ws)}
+                      />
                       <WorkstationLegend />
                       {inv.devices && inv.devices.length > 0 && (
                         <div className="border-t border-[#E5E7EB] pt-2">
@@ -408,13 +412,15 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                           </div>
                         )
                       })}
-                      {incidents.length > 3 && !showAllIncidents && (
+                      {incidents.length > 3 && (
                         <button
                           type="button"
-                          onClick={() => setShowAllIncidents(true)}
+                          onClick={() => setShowAllIncidents(!showAllIncidents)}
                           className="w-full rounded-lg py-1.5 text-xs font-semibold text-[#003B7A] hover:bg-[#003B7A]/5"
                         >
-                          Ver todas las incidencias
+                          {showAllIncidents
+                            ? "Ver menos"
+                            : `Ver todas las incidencias (${incidents.length})`}
                         </button>
                       )}
                     </>
@@ -422,9 +428,81 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                 </div>
               )}
             </div>
-          </div>
         </div>
       )}
+
+      {/* ── Station detail modal ── */}
+      <Modal
+        open={Boolean(selectedWs)}
+        onClose={() => setSelectedWs(null)}
+        title={selectedWs ? `Estación ${selectedWs.code}` : ""}
+        footer={
+          <Button variant="secondary" onClick={() => setSelectedWs(null)}>
+            Cerrar
+          </Button>
+        }
+      >
+        {selectedWs && (
+          <div className="space-y-4">
+            {/* Position */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                Fila {selectedWs.rowNumber} · Columna {selectedWs.columnNumber}
+              </span>
+              <Badge tone="neutral">{wsStatusMeta(selectedWs.status).label}</Badge>
+            </div>
+
+            {/* Equipment */}
+            {selectedWs.equipment && selectedWs.equipment.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Equipos ({selectedWs.equipment.length})
+                </p>
+                {selectedWs.equipment.map((eq) => (
+                  <div
+                    key={eq.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{eq.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {eq.code} · {eq.categoryName}
+                      </p>
+                    </div>
+                    <Badge tone="neutral" className="ml-2 shrink-0">
+                      {EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin equipos asignados.</p>
+            )}
+
+            {/* Software */}
+            {selectedWs.equipment?.some((eq) => eq.installedSoftware?.length) && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Software instalado
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedWs.equipment
+                    .flatMap((eq) => eq.installedSoftware || [])
+                    .slice(0, 10)
+                    .map((sw, i) => (
+                      <span
+                        key={i}
+                        className="rounded-md bg-card px-2 py-0.5 text-xs text-foreground shadow-sm"
+                      >
+                        {sw.name} {sw.version}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </article>
   )
 }
