@@ -23,6 +23,9 @@ import {
   shortDate,
 } from "../../lib/labUi"
 import { WorkstationGrid, WorkstationLegend } from "../../components/WorkstationGrid"
+import { Modal } from "../../components/Modal"
+import { Button } from "../../components/Button"
+import { Badge, StatusBadge } from "../../components/Badge"
 
 function occupancyColor(pct) {
   if (pct > 85) return "#DC2626"
