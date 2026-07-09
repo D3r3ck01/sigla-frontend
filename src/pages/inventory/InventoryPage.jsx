@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Monitor, Package, AlertTriangle } from "lucide-react"
+import { Monitor, Package, AlertTriangle, Plus, X } from "lucide-react"
 import { api } from "../../lib/api"
 import { useAsync, asList } from "../../lib/useAsync"
 import { useToast } from "../../context/ToastContext"
@@ -7,7 +7,7 @@ import { PageHeader } from "../../components/PageHeader"
 import { Card, CardHeader, CardBody } from "../../components/Card"
 import { Button } from "../../components/Button"
 import { Badge } from "../../components/Badge"
-import { Field, Select } from "../../components/Field"
+import { Field, Select, Input } from "../../components/Field"
 import { DataTable } from "../../components/DataTable"
 import { Modal } from "../../components/Modal"
 import { WorkstationGrid, WorkstationLegend } from "../../components/WorkstationGrid"
@@ -62,9 +62,16 @@ export function InventoryPage() {
   const [detailSoftware, setDetailSoftware] = useState([])
   const [editing, setEditing] = useState(null) // workstation being edited
   const [wsStatus, setWsStatus] = useState("")
-  const [eqStatus, setEqStatus] = useState("")
   const [saving, setSaving] = useState(false)
   const [incidentInitial, setIncidentInitial] = useState(null)
+
+  // New-equipment form state (inside the edit modal).
+  const [newEqName, setNewEqName] = useState("")
+  const [newEqCategory, setNewEqCategory] = useState("")
+  const [newEqCustomCategory, setNewEqCustomCategory] = useState("")
+  const [newEqStatus, setNewEqStatus] = useState("ACTIVE")
+  const [addingEq, setAddingEq] = useState(false)
+  const [busyEqId, setBusyEqId] = useState(null)
 
   const selectedLab = labs.find((l) => String(l.id) === String(labId))
 
@@ -100,16 +107,18 @@ export function InventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labId])
 
-  // Fetch installed software for the equipment of the workstation being viewed.
+  // Fetch installed software for the primary computer of the workstation being viewed.
   useEffect(() => {
-    const eq = detail ? equipment.find((e) => String(e.workstationId) === String(detail.id)) : null
-    if (!eq) {
+    const wsEquip = detail ? equipment.filter((e) => String(e.workstationId) === String(detail.id)) : []
+    const primary =
+      wsEquip.find((e) => equipCategories.find((c) => c.id === e.categoryId)?.type === "COMPUTER") || wsEquip[0]
+    if (!primary) {
       setDetailSoftware([])
       return
     }
     let active = true
     api
-      .get(`/equipment/${eq.id}/installed-software`)
+      .get(`/equipment/${primary.id}/installed-software`)
       .then((d) => active && setDetailSoftware(asList(d)))
       .catch(() => active && setDetailSoftware([]))
     return () => {
@@ -118,10 +127,17 @@ export function InventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail])
 
+  // Map<workstationId, equipment[]> — a workstation can hold multiple items.
   const equipmentByWs = useMemo(() => {
     const map = new Map()
     for (const eq of equipment) {
-      if (eq.workstationId) map.set(String(eq.workstationId), { ...eq, categoryName: equipCategoryName(eq.categoryId) })
+      if (!eq.workstationId) continue
+      const key = String(eq.workstationId)
+      const resolvedCat = eq.categoryId ? equipCategoryName(eq.categoryId) : eq.categoryName || "—"
+      const item = { ...eq, categoryName: resolvedCat }
+      const arr = map.get(key)
+      if (arr) arr.push(item)
+      else map.set(key, [item])
     }
     return map
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,15 +147,21 @@ export function InventoryPage() {
 
   // Workstations with their equipment attached (for the grid tooltips).
   const wsWithEquipment = useMemo(
-    () => workstations.map((w) => ({ ...w, equipment: equipmentByWs.get(String(w.id)) || null })),
+    () => workstations.map((w) => ({ ...w, equipment: equipmentByWs.get(String(w.id)) || [] })),
     [workstations, equipmentByWs],
   )
+
+  function resetNewEqForm() {
+    setNewEqName("")
+    setNewEqCategory("")
+    setNewEqCustomCategory("")
+    setNewEqStatus("ACTIVE")
+  }
 
   function openEdit(ws) {
     setEditing(ws)
     setWsStatus(ws.status)
-    const eq = equipmentByWs.get(String(ws.id))
-    setEqStatus(eq ? eq.status : "")
+    resetNewEqForm()
     setDetail(null)
   }
 
@@ -151,10 +173,6 @@ export function InventoryPage() {
       if (wsStatus !== editing.status) {
         await api.patch(`/workstations/${editing.id}/status`, { status: wsStatus })
       }
-      const eq = equipmentByWs.get(String(editing.id))
-      if (eq && eqStatus && eqStatus !== eq.status) {
-        await api.patch(`/equipment/${eq.id}/status`, { status: eqStatus })
-      }
       toast.success("Estado actualizado correctamente.")
       setEditing(null)
       await loadInventory(labId)
@@ -165,12 +183,60 @@ export function InventoryPage() {
     }
   }
 
+  async function handleAddEquipment() {
+    if (!editing || !newEqName.trim()) return
+    setAddingEq(true)
+    try {
+      // "Other…" lets the operator type a free-text category; otherwise use the selected id.
+      const categoryId = newEqCategory === "__other__" ? null : newEqCategory || null
+      await api.post("/equipment", {
+        name: newEqName.trim(),
+        categoryId,
+        categoryName: newEqCategory === "__other__" ? newEqCustomCategory.trim() : undefined,
+        workstationId: editing.id,
+        status: newEqStatus,
+      })
+      toast.success("Equipo agregado correctamente.")
+      resetNewEqForm()
+      await loadInventory(labId)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setAddingEq(false)
+    }
+  }
+
+  async function handleChangeEquipmentStatus(eq, status) {
+    setBusyEqId(eq.id)
+    try {
+      await api.patch(`/equipment/${eq.id}/status`, { status })
+      await loadInventory(labId)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setBusyEqId(null)
+    }
+  }
+
+  async function handleDeleteEquipment(eq) {
+    setBusyEqId(eq.id)
+    try {
+      await api.del(`/equipment/${eq.id}`)
+      toast.success("Equipo eliminado correctamente.")
+      await loadInventory(labId)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setBusyEqId(null)
+    }
+  }
+
   function reportFromEdit() {
-    const eq = editing ? equipmentByWs.get(String(editing.id)) : null
+    const list = editing ? equipmentByWs.get(String(editing.id)) : null
     setIncidentInitial({
       laboratoryId: labId,
       workstationId: editing?.id || "",
-      equipmentId: eq?.id || "",
+      equipmentId: list?.[0]?.id || "",
     })
     setEditing(null)
   }
@@ -186,15 +252,16 @@ export function InventoryPage() {
     { key: "status", header: "Estado", render: (r) => <WsStatusBadge status={r.status} /> },
     {
       key: "equipment",
-      header: "Equipo asignado",
+      header: "Equipos asignados",
       render: (r) => {
-        const eq = equipmentByWs.get(String(r.id))
-        return eq ? (
+        const list = equipmentByWs.get(String(r.id)) || []
+        return list.length ? (
           <span className="text-sm text-foreground">
-            <span className="font-mono text-xs">{eq.code}</span> · {eq.name}
+            {list.map((e) => e.name).join(", ")}{" "}
+            <span className="text-xs text-muted-foreground">({list.length})</span>
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground">Sin equipo</span>
+          <span className="text-sm text-muted-foreground">Sin equipos</span>
         )
       },
     },
@@ -210,8 +277,10 @@ export function InventoryPage() {
     },
   ]
 
-  const editingEquipment = editing ? equipmentByWs.get(String(editing.id)) : null
-  const detailEquipment = detail ? equipmentByWs.get(String(detail.id)) : null
+  const editingEquipment = (editing ? equipmentByWs.get(String(editing.id)) : null) || []
+  const detailEquipment = (detail ? equipmentByWs.get(String(detail.id)) : null) || []
+  const otherSelected = newEqCategory === "__other__"
+  const canAddEquipment = Boolean(newEqName.trim()) && (!otherSelected || Boolean(newEqCustomCategory.trim()))
 
   return (
     <div>
@@ -345,25 +414,28 @@ export function InventoryPage() {
                 <WsStatusBadge status={detail.status} />
               </div>
             </div>
-            {detailEquipment ? (
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">{detailEquipment.name}</p>
-                    <p className="font-mono text-xs text-muted-foreground">{detailEquipment.code}</p>
+            {detailEquipment.length ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Equipos asignados ({detailEquipment.length})
+                </p>
+                {detailEquipment.map((eq) => (
+                  <div key={eq.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{eq.name}</p>
+                        <p className="font-mono text-xs text-muted-foreground">{eq.code}</p>
+                      </div>
+                      <Badge tone="neutral">{EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}</Badge>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      <span className="text-muted-foreground">{eq.categoryName}</span>
+                    </div>
                   </div>
-                  <Badge tone="neutral">
-                    {EQUIPMENT_STATUS_LABEL[detailEquipment.status] || detailEquipment.status}
-                  </Badge>
-                </div>
-                <dl className="grid grid-cols-1 gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-muted-foreground">{equipCategoryName(detailEquipment.categoryId)}</span>
-                  </div>
-                </dl>
+                ))}
                 {detailSoftware.length > 0 && (
-                  <div className="mt-3 border-t border-border pt-3">
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
                     <p className="mb-1.5 text-xs font-medium text-muted-foreground">Software instalado</p>
                     <div className="flex flex-wrap gap-1.5">
                       {detailSoftware.map((s) => (
@@ -379,7 +451,7 @@ export function InventoryPage() {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Esta estación no tiene equipo asignado.</p>
+              <p className="text-sm text-muted-foreground">Esta estación no tiene equipos asignados.</p>
             )}
           </div>
         )}
@@ -403,28 +475,115 @@ export function InventoryPage() {
         }
       >
         {editing && (
-          <form id="ws-edit-form" onSubmit={handleSaveEdit} className="space-y-4">
-            <Field label="Estado de la estación" required>
-              <Select value={wsStatus} onChange={(e) => setWsStatus(e.target.value)}>
-                {WS_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {editingEquipment && (
-              <Field label={`Estado del equipo (${editingEquipment.code} · ${editingEquipment.name})`}>
-                <Select value={eqStatus} onChange={(e) => setEqStatus(e.target.value)}>
-                  {EQUIP_STATUSES.map((s) => (
+          <>
+            <form id="ws-edit-form" onSubmit={handleSaveEdit} className="space-y-4">
+              <Field label="Estado de la estación" required>
+                <Select value={wsStatus} onChange={(e) => setWsStatus(e.target.value)}>
+                  {WS_STATUSES.map((s) => (
                     <option key={s.value} value={s.value}>
                       {s.label}
                     </option>
                   ))}
                 </Select>
               </Field>
-            )}
-          </form>
+            </form>
+
+            <div className="mt-5 border-t border-border pt-4">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Equipos asignados
+              </h4>
+
+              {editingEquipment.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Esta estación no tiene equipos asignados.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {editingEquipment.map((eq) => (
+                    <li
+                      key={eq.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{eq.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          <span className="font-mono">{eq.code}</span> · {eq.categoryName}
+                        </p>
+                      </div>
+                      <Select
+                        value={eq.status}
+                        disabled={busyEqId === eq.id}
+                        onChange={(e) => handleChangeEquipmentStatus(eq, e.target.value)}
+                        className="w-40"
+                        aria-label={`Estado de ${eq.name}`}
+                      >
+                        {EQUIP_STATUSES.map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </Select>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEquipment(eq)}
+                        disabled={busyEqId === eq.id}
+                        className="rounded-md p-1.5 text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+                        aria-label={`Eliminar ${eq.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="mt-4 space-y-3 rounded-lg border border-dashed border-border p-3">
+                <p className="text-xs font-semibold text-foreground">Agregar equipo</p>
+                <Field label="Nombre del equipo" required>
+                  <Input
+                    placeholder='Ej. Teclado HP, Mouse Logitech, Monitor Dell 22"'
+                    value={newEqName}
+                    onChange={(e) => setNewEqName(e.target.value)}
+                  />
+                </Field>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Categoría">
+                    <Select value={newEqCategory} onChange={(e) => setNewEqCategory(e.target.value)}>
+                      <option value="">Sin categoría…</option>
+                      {equipCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                      <option value="__other__">Otra…</option>
+                    </Select>
+                  </Field>
+                  <Field label="Estado inicial">
+                    <Select value={newEqStatus} onChange={(e) => setNewEqStatus(e.target.value)}>
+                      {EQUIP_STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                {otherSelected && (
+                  <Field label="Nueva categoría" required>
+                    <Input
+                      placeholder="Ej. Lector de tarjetas"
+                      value={newEqCustomCategory}
+                      onChange={(e) => setNewEqCustomCategory(e.target.value)}
+                    />
+                  </Field>
+                )}
+                <div className="flex justify-end">
+                  <Button onClick={handleAddEquipment} disabled={!canAddEquipment} loading={addingEq}>
+                    <Plus className="h-4 w-4" />
+                    Agregar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </Modal>
 

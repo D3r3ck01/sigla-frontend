@@ -37,21 +37,22 @@ export function WorkstationGrid({ workstations = [], onSelect, cell = 28 }) {
               {ws.code}
             </button>
             {/* Tooltip */}
-            <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden w-44 -translate-x-1/2 rounded-lg bg-[#1F2937] px-3 py-2 text-left text-xs leading-relaxed text-white shadow-lg group-hover:block group-focus-within:block">
+            <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden w-48 -translate-x-1/2 rounded-lg bg-[#1F2937] px-3 py-2 text-left text-xs leading-relaxed text-white shadow-lg group-hover:block group-focus-within:block">
               <p className="font-semibold">Estación {ws.code}</p>
-              {eq ? (
-                <>
-                  <p className="text-white/90">
-                    {eq.categoryName ? `${eq.categoryName} — ` : ""}
-                    {EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}
-                  </p>
-                  <p className="text-white/70">
-                    <span className="font-mono">{eq.code}</span>
-                    {eq.name ? `: ${eq.name}` : ""}
-                  </p>
-                </>
+              {items.length ? (
+                <ul className="mt-0.5 max-h-40 space-y-1 overflow-y-auto">
+                  {items.map((eq) => (
+                    <li key={eq.id}>
+                      <p className="text-white/90">
+                        {eq.name || eq.code}
+                        {eq.categoryName ? ` · ${eq.categoryName}` : ""}
+                      </p>
+                      <p className="text-white/60">{EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}</p>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <p className="text-white/70">Sin equipo asignado</p>
+                <p className="text-white/70">Sin equipos asignados</p>
               )}
               <p className="mt-0.5 font-medium" style={{ color: meta.dot }}>
                 {meta.label}
