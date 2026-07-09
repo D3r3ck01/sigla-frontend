@@ -442,7 +442,13 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
           </Button>
         }
       >
-        {selectedWs && (
+        {selectedWs && (() => {
+          const equipmentList = Array.isArray(selectedWs.equipment)
+            ? selectedWs.equipment
+            : selectedWs.equipment
+            ? [selectedWs.equipment]
+            : []
+          return (
           <div className="space-y-4">
             {/* Position */}
             <div className="flex items-center justify-between">
@@ -453,12 +459,12 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
             </div>
 
             {/* Equipment */}
-            {selectedWs.equipment && selectedWs.equipment.length > 0 ? (
+            {equipmentList.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Equipos ({selectedWs.equipment.length})
+                  Equipos ({equipmentList.length})
                 </p>
-                {selectedWs.equipment.map((eq) => (
+                {equipmentList.map((eq) => (
                   <div
                     key={eq.id}
                     className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2"
@@ -480,13 +486,13 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
             )}
 
             {/* Software */}
-            {selectedWs.equipment?.some((eq) => eq.installedSoftware?.length) && (
+            {equipmentList.some((eq) => eq.installedSoftware?.length) && (
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">
                   Software instalado
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {selectedWs.equipment
+                  {equipmentList
                     .flatMap((eq) => eq.installedSoftware || [])
                     .slice(0, 10)
                     .map((sw, i) => (
@@ -501,7 +507,8 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
       </Modal>
     </article>
   )
