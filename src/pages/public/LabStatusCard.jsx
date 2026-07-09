@@ -119,9 +119,9 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
     : []
 
   return (
-    <article className="flex flex-col rounded-xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+    <article className="flex flex-col rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_6px_20px_rgba(0,0,0,0.10)] transition-shadow hover:shadow-[0_10px_28px_rgba(0,0,0,0.14)]">
       {/* ── Layer 1: Room identity header ─────────────────────────────── */}
-      <header className={`px-4 text-white ${compact ? "py-2.5" : "py-3"}`} style={{ backgroundColor: bg }}>
+      <header className={`rounded-t-2xl px-4 text-white ${compact ? "py-2.5" : "py-3"}`} style={{ backgroundColor: bg }}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-3">
             <span
@@ -152,7 +152,11 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
       </header>
 
       {/* ── Layer 2: Current session ──────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div
+        className={`flex flex-1 flex-col gap-3 p-4 ${
+          !showFooter || !expanded ? "rounded-b-2xl" : ""
+        }`}
+      >
         {lab.status === "UNDER_MAINTENANCE" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-4 text-center">
             <Wrench className={compact ? "h-8 w-8 text-[#D97706]" : "h-10 w-10 text-[#D97706]"} aria-hidden="true" />
@@ -299,11 +303,11 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
       {/* ── Expandable panel ──────────────────────────────────────────── */}
       {showFooter && (
         <div
-          className={`overflow-y-auto transition-all duration-300 ease-in-out ${
-            expanded ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
+          className={`transition-all duration-300 ease-in-out ${
+            expanded ? "max-h-[2000px] opacity-100" : "max-h-0 overflow-hidden opacity-0"
           }`}
         >
-            <div className="border-t border-[#E5E7EB] bg-[#F8FAFC] p-4">
+            <div className="rounded-b-2xl border-t border-[#E5E7EB] bg-[#F8FAFC] p-4">
               {/* Tabs */}
               <div className="mb-3 flex gap-1 rounded-lg bg-[#E2E8F0] p-1">
                 {canEquip && (
