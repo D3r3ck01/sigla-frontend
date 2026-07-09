@@ -1,7 +1,7 @@
 import { Monitor, Network, Settings, BookOpen, Building2 } from "lucide-react"
 
 /**
- * Shared visual metadata for the SIGLA UCE classroom / laboratory UI.
+ * Shared visual metadata for the Labora classroom / laboratory UI.
  * Colors extend the institutional palette (#003B7A, #C8102E) with the
  * per-type accents defined in the redesign spec.
  */
