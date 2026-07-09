@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate, Navigate } from "react-router-dom"
-import { FlaskRound, Mail, Lock, AlertCircle } from "lucide-react"
+import { Mail, Lock, AlertCircle } from "lucide-react"
 import { useAuth, DEMO_CREDENTIALS } from "../../context/AuthContext"
 import { Button } from "../../components/Button"
 import { Field, Input } from "../../components/Field"
@@ -40,13 +40,29 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
-            <FlaskRound className="h-7 w-7" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg">
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" className="h-10 w-10">
+              <rect width="64" height="64" rx="13" fill="#3730A3" />
+              <rect x="7" y="10" width="50" height="36" rx="3.5" fill="none" stroke="white" strokeWidth="2.5" opacity=".95" />
+              <rect x="13" y="17" width="11" height="7" rx="2" fill="white" opacity=".9" />
+              <rect x="27" y="17" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <rect x="41" y="17" width="11" height="7" rx="2" fill="white" opacity=".85" />
+              <rect x="13" y="27" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <rect x="27" y="27" width="11" height="7" rx="2" fill="white" />
+              <rect x="41" y="27" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <rect x="13" y="37" width="11" height="7" rx="2" fill="white" opacity=".85" />
+              <rect x="27" y="37" width="11" height="7" rx="2" fill="white" opacity=".85" />
+              <rect x="41" y="37" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <circle cx="32" cy="30" r="2" fill="#34D399" />
+              <rect x="29" y="46" width="6" height="6" rx="1" fill="white" opacity=".5" />
+              <rect x="22" y="52" width="20" height="3.5" rx="1.5" fill="white" opacity=".5" />
+              <circle cx="53" cy="13" r="3" fill="#34D399" />
+            </svg>
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-white">SIGLA UCE</h1>
+          <h1 className="mt-4 text-2xl font-bold text-white">Labora</h1>
           <p className="mt-1 text-sm font-medium text-white/90">Universidad Central del Ecuador</p>
           <p className="mt-1 text-sm text-sidebar-foreground/70">
-            Sistema Integral de Gestión de Laboratorios Académicos
+            Sistema de gestión de laboratorios
           </p>
         </div>
 
@@ -120,8 +136,18 @@ export function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-sidebar-foreground/50">
-          © {new Date().getFullYear()} Universidad Central del Ecuador — SIGLA
+          © {new Date().getFullYear()} Universidad Central del Ecuador — Labora
         </p>
+
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="text-sm font-medium text-sidebar-foreground/70 underline-offset-4 hover:text-white hover:underline"
+          >
+            ← Ver panel público
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -463,7 +463,7 @@ if (typeof window !== "undefined") {
     db = seed()
     save(db)
     // eslint-disable-next-line no-console
-    console.log("[SIGLA] Mock DB reset to seed data.")
+    console.log("[Labora] Mock DB reset to seed data.")
   }
 }
 
@@ -543,7 +543,14 @@ const equipCategoryName = (id) => db.equipmentCategories.find((c) => eqId(c.id, 
 function inventoryResponse(labId) {
   const ws = stationsOf(labId)
   const eq = equipmentOf(labId)
-  const withCat = (e) => (e ? { ...e, categoryName: equipCategoryName(e.categoryId) || e.categoryName || null } : null)
+  const withCat = (e) =>
+    e
+      ? {
+          ...e,
+          categoryName: equipCategoryName(e.categoryId) || e.categoryName || null,
+          installedSoftware: softwareOf(e.id).map((s) => ({ name: s.name, version: s.version })),
+        }
+      : null
   const workstations = ws.map((w) => ({
     ...w,
     equipment: eq.filter((e) => eqId(e.workstationId, w.id)).map(withCat),

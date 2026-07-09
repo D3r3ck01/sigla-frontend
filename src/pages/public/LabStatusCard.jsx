@@ -21,8 +21,12 @@ import {
   INCIDENT_STATUS_LABEL,
   EQUIPMENT_STATUS_LABEL,
   shortDate,
+  wsStatusMeta,
 } from "../../lib/labUi"
 import { WorkstationGrid, WorkstationLegend } from "../../components/WorkstationGrid"
+import { Modal } from "../../components/Modal"
+import { Button } from "../../components/Button"
+import { Badge, StatusBadge } from "../../components/Badge"
 
 function occupancyColor(pct) {
   if (pct > 85) return "#DC2626"
@@ -48,6 +52,7 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
   const [loadingInv, setLoadingInv] = useState(false)
   const [loadingInc, setLoadingInc] = useState(false)
   const [showAllIncidents, setShowAllIncidents] = useState(false)
+  const [selectedWs, setSelectedWs] = useState(null)
 
   const t = typeMeta(categoryName)
   const TypeIcon = t.Icon
@@ -114,9 +119,9 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
     : []
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+    <article className="flex flex-col rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_6px_20px_rgba(0,0,0,0.10)] transition-shadow hover:shadow-[0_10px_28px_rgba(0,0,0,0.14)]">
       {/* ── Layer 1: Room identity header ─────────────────────────────── */}
-      <header className={`px-4 text-white ${compact ? "py-2.5" : "py-3"}`} style={{ backgroundColor: bg }}>
+      <header className={`rounded-t-2xl px-4 text-white ${compact ? "py-2.5" : "py-3"}`} style={{ backgroundColor: bg }}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-3">
             <span
@@ -147,7 +152,11 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
       </header>
 
       {/* ── Layer 2: Current session ──────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div
+        className={`flex flex-1 flex-col gap-3 p-4 ${
+          !showFooter || !expanded ? "rounded-b-2xl" : ""
+        }`}
+      >
         {lab.status === "UNDER_MAINTENANCE" ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-4 text-center">
             <Wrench className={compact ? "h-8 w-8 text-[#D97706]" : "h-10 w-10 text-[#D97706]"} aria-hidden="true" />
@@ -294,12 +303,11 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
       {/* ── Expandable panel ──────────────────────────────────────────── */}
       {showFooter && (
         <div
-          className={`grid transition-all duration-300 ease-in-out ${
-            expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          className={`transition-all duration-300 ease-in-out ${
+            expanded ? "max-h-[2000px] opacity-100" : "max-h-0 overflow-hidden opacity-0"
           }`}
         >
-          <div className="overflow-hidden">
-            <div className="border-t border-[#E5E7EB] bg-[#F8FAFC] p-4">
+            <div className="rounded-b-2xl border-t border-[#E5E7EB] bg-[#F8FAFC] p-4">
               {/* Tabs */}
               <div className="mb-3 flex gap-1 rounded-lg bg-[#E2E8F0] p-1">
                 {canEquip && (
@@ -335,7 +343,10 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                     </div>
                   ) : (
                     <>
-                      <WorkstationGrid workstations={inv.workstations} />
+                      <WorkstationGrid
+                        workstations={inv.workstations}
+                        onSelect={(ws) => setSelectedWs(ws)}
+                      />
                       <WorkstationLegend />
                       {inv.devices && inv.devices.length > 0 && (
                         <div className="border-t border-[#E5E7EB] pt-2">
@@ -405,13 +416,15 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                           </div>
                         )
                       })}
-                      {incidents.length > 3 && !showAllIncidents && (
+                      {incidents.length > 3 && (
                         <button
                           type="button"
-                          onClick={() => setShowAllIncidents(true)}
+                          onClick={() => setShowAllIncidents(!showAllIncidents)}
                           className="w-full rounded-lg py-1.5 text-xs font-semibold text-[#003B7A] hover:bg-[#003B7A]/5"
                         >
-                          Ver todas las incidencias
+                          {showAllIncidents
+                            ? "Ver menos"
+                            : `Ver todas las incidencias (${incidents.length})`}
                         </button>
                       )}
                     </>
@@ -419,9 +432,88 @@ export function LabStatusCard({ lab, compact = false, fetchInventory, fetchIncid
                 </div>
               )}
             </div>
-          </div>
         </div>
       )}
+
+      {/* ── Station detail modal ── */}
+      <Modal
+        open={Boolean(selectedWs)}
+        onClose={() => setSelectedWs(null)}
+        title={selectedWs ? `Estación ${selectedWs.code}` : ""}
+        footer={
+          <Button variant="secondary" onClick={() => setSelectedWs(null)}>
+            Cerrar
+          </Button>
+        }
+      >
+        {selectedWs && (() => {
+          const equipmentList = Array.isArray(selectedWs.equipment)
+            ? selectedWs.equipment
+            : selectedWs.equipment
+            ? [selectedWs.equipment]
+            : []
+          return (
+          <div className="space-y-4">
+            {/* Position */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                Fila {selectedWs.rowNumber} · Columna {selectedWs.columnNumber}
+              </span>
+              <Badge tone="neutral">{wsStatusMeta(selectedWs.status).label}</Badge>
+            </div>
+
+            {/* Equipment */}
+            {equipmentList.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Equipos ({equipmentList.length})
+                </p>
+                {equipmentList.map((eq) => (
+                  <div
+                    key={eq.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{eq.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {eq.code} · {eq.categoryName}
+                      </p>
+                    </div>
+                    <Badge tone="neutral" className="ml-2 shrink-0">
+                      {EQUIPMENT_STATUS_LABEL[eq.status] || eq.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin equipos asignados.</p>
+            )}
+
+            {/* Software */}
+            {equipmentList.some((eq) => eq.installedSoftware?.length) && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Software instalado
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {equipmentList
+                    .flatMap((eq) => eq.installedSoftware || [])
+                    .slice(0, 10)
+                    .map((sw, i) => (
+                      <span
+                        key={i}
+                        className="rounded-md bg-card px-2 py-0.5 text-xs text-foreground shadow-sm"
+                      >
+                        {sw.name} {sw.version}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+          )
+        })()}
+      </Modal>
     </article>
   )
 }
