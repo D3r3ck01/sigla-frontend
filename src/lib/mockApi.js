@@ -11,10 +11,10 @@
  *  and persisted to localStorage so changes survive page refreshes.
  *
  *  ➜ To switch to the REAL backend: set VITE_USE_MOCK="false".
- *  ➜ To reset demo data: run  window.__siglaResetMock()  in the browser console
+ *  ➜ To reset demo data: run  window.__laboraResetMock()  in the browser console
  */
 
-const DB_KEY = "sigla_mock_db"
+const DB_KEY = "labora_mock_db"
   const DB_VERSION = 6 // bump to force a reseed when the seed shape changes
 
 // ── date helpers ───────────────────────────────────────────────────────────
@@ -459,7 +459,7 @@ let db = load()
 
 if (typeof window !== "undefined") {
   // Convenience helper to reset the demo data from the browser console.
-  window.__siglaResetMock = () => {
+  window.__laboraResetMock = () => {
     db = seed()
     save(db)
     // eslint-disable-next-line no-console

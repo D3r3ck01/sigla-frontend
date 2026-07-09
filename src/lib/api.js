@@ -13,7 +13,7 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK
   ? import.meta.env.VITE_USE_MOCK !== "false"
   : true
 
-const TOKEN_KEY = "sigla_token"
+const TOKEN_KEY = "labora_token"
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY)

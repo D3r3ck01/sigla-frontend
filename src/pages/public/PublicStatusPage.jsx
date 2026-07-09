@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  FlaskConical,
+  Monitor,
   LogIn,
   RefreshCw,
   Building2,
@@ -489,7 +489,7 @@ export function PublicStatusPage() {
             </div>
           ) : filteredLabs.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-xl bg-white py-16 text-center shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
-              <FlaskConical className="h-12 w-12 text-[#6B7280]" aria-hidden="true" />
+              <Monitor className="h-12 w-12 text-[#6B7280]" aria-hidden="true" />
               <p className="text-[#6B7280]">
                 {hasActiveFilter
                   ? "No hay laboratorios registrados para esta facultad."
