@@ -1,35 +1,35 @@
 import { useEffect, useState } from "react"
-import { NavLink } from "react-router-dom"
+import { NavLink, useNavigate } from "react-router-dom"
 import {
-  LayoutDashboard,
-  GraduationCap,
-  FlaskConical,
-  CalendarDays,
-  ClipboardList,
-  LogOut,
-  FlaskRound,
-  Monitor,
-  AlertTriangle,
-} from "lucide-react"
+  IconDashboard,
+  IconSchool,
+  IconDeviceDesktop,
+  IconCpu,
+  IconAlertTriangle,
+  IconCalendarEvent,
+  IconCalendarCheck,
+  IconLogout,
+} from "@tabler/icons-react"
 import { cn } from "../lib/utils"
 import { api } from "../lib/api"
 import { asList } from "../lib/useAsync"
 import { useAuth } from "../context/AuthContext"
 
 const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/academic", label: "Académico", icon: GraduationCap },
-  { to: "/laboratories", label: "Laboratorios", icon: FlaskConical },
-  { to: "/admin/inventory", label: "Inventario", icon: Monitor },
-  { to: "/admin/incidents", label: "Incidencias", icon: AlertTriangle, badge: "incidents" },
-  { to: "/scheduling/base-schedules", label: "Horarios", icon: CalendarDays },
-  { to: "/sessions", label: "Sesiones", icon: ClipboardList },
+  { to: "/dashboard", label: "Panel de control", icon: IconDashboard },
+  { to: "/academic", label: "Académico", icon: IconSchool },
+  { to: "/laboratories", label: "Laboratorios", icon: IconDeviceDesktop },
+  { to: "/admin/inventory", label: "Inventario", icon: IconCpu },
+  { to: "/admin/incidents", label: "Incidencias", icon: IconAlertTriangle, badge: "incidents" },
+  { to: "/scheduling/base-schedules", label: "Horarios", icon: IconCalendarEvent },
+  { to: "/sessions", label: "Sesiones", icon: IconCalendarCheck },
 ]
 
 const INCIDENT_REFRESH_MS = 60000
 
 export function Sidebar({ open, onNavigate }) {
   const { logout } = useAuth()
+  const navigate = useNavigate()
   const [incidentCount, setIncidentCount] = useState(0)
 
   useEffect(() => {
@@ -72,11 +72,24 @@ export function Sidebar({ open, onNavigate }) {
       >
         {/* Logo */}
         <div className="flex h-16 items-center gap-2.5 border-b border-white/10 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <FlaskRound className="h-5 w-5" />
-          </div>
+          <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 shrink-0">
+            <rect width="64" height="64" rx="13" fill="#3730A3" />
+            <rect x="7" y="10" width="50" height="36" rx="3.5" fill="none" stroke="white" strokeWidth="2.5" opacity=".95" />
+            <rect x="13" y="17" width="11" height="7" rx="2" fill="white" opacity=".9" />
+            <rect x="27" y="17" width="11" height="7" rx="2" fill="white" opacity=".4" />
+            <rect x="41" y="17" width="11" height="7" rx="2" fill="white" opacity=".85" />
+            <rect x="13" y="27" width="11" height="7" rx="2" fill="white" opacity=".4" />
+            <rect x="27" y="27" width="11" height="7" rx="2" fill="white" />
+            <rect x="41" y="27" width="11" height="7" rx="2" fill="white" opacity=".4" />
+            <rect x="13" y="37" width="11" height="7" rx="2" fill="white" opacity=".85" />
+            <rect x="27" y="37" width="11" height="7" rx="2" fill="white" opacity=".85" />
+            <rect x="41" y="37" width="11" height="7" rx="2" fill="white" opacity=".4" />
+            <circle cx="32" cy="30" r="2" fill="#34D399" />
+            <rect x="29" y="46" width="6" height="6" rx="1" fill="white" opacity=".5" />
+            <rect x="22" y="52" width="20" height="3.5" rx="1.5" fill="white" opacity=".5" />
+          </svg>
           <div className="leading-tight">
-            <p className="text-sm font-bold text-white">SIGLA UCE</p>
+            <p className="text-sm font-bold text-white">Labora</p>
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
               Universidad Central del Ecuador
             </p>
@@ -123,10 +136,13 @@ export function Sidebar({ open, onNavigate }) {
         {/* Logout */}
         <div className="border-t border-white/10 p-3">
           <button
-            onClick={logout}
+            onClick={async () => {
+              await logout()
+              navigate("/")
+            }}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-danger/20 hover:text-white"
           >
-            <LogOut className="h-5 w-5 shrink-0" />
+            <IconLogout className="h-5 w-5 shrink-0" />
             <span>Cerrar sesión</span>
           </button>
         </div>

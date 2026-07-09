@@ -3,7 +3,7 @@ import { api, getToken, setToken, clearToken } from "../lib/api"
 
 const AuthContext = createContext(null)
 
-const USER_KEY = "sigla_user"
+const USER_KEY = "labora_user"
 
 // Demo bypass is only active while running against the in-memory mock backend.
 const USE_MOCK = import.meta.env.VITE_USE_MOCK ? import.meta.env.VITE_USE_MOCK !== "false" : true

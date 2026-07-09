@@ -15,7 +15,7 @@
  */
 
 const DB_KEY = "sigla_mock_db"
-const DB_VERSION = 5 // bump to force a reseed when the seed shape changes
+  const DB_VERSION = 6 // bump to force a reseed when the seed shape changes
 
 // ── date helpers ───────────────────────────────────────────────────────────
 function todayISO() {
@@ -57,6 +57,7 @@ const EQ_CAT = {
   COMPUTER: "cat-eq-computer",
   NETWORK: "cat-eq-network",
   PROJECTOR: "cat-eq-projector",
+  PERIPHERAL: "cat-eq-peripheral",
 }
 const INC_TYPE = {
   INCIDENT: "itype-incident",
@@ -110,6 +111,32 @@ function buildComputers(stations, num, spec) {
     name: spec.name,
     status: WS_TO_EQUIP[ws.status] || "ACTIVE",
   }))
+}
+
+// Peripherals attached to every workstation (multi-equipment per station).
+const PERIPHERALS = [
+  { suffix: "KB", name: "Teclado HP" },
+  { suffix: "MS", name: "Mouse HP" },
+  { suffix: "MON", name: 'Monitor Dell 22"' },
+]
+
+/** Builds the peripheral equipment records shared by every workstation. */
+function buildPeripherals(stations, num) {
+  const list = []
+  for (const ws of stations) {
+    for (const p of PERIPHERALS) {
+      list.push({
+        id: `eq-${num}-${ws.code}-${p.suffix}`,
+        laboratoryId: ws.laboratoryId,
+        workstationId: ws.id,
+        categoryId: EQ_CAT.PERIPHERAL,
+        code: `EQ-${num}-${ws.code}-${p.suffix}`,
+        name: p.name,
+        status: WS_TO_EQUIP[ws.status] || "ACTIVE",
+      })
+    }
+  }
+  return list
 }
 
 function buildSeedWorkstations() {
@@ -174,6 +201,14 @@ function buildSeedEquipment(workstations) {
     ...buildComputers(wsFor("lab-6"), "103", dbSpec),
   ]
 
+  // Every workstation also carries a set of peripherals (multi-equipment).
+  const peripherals = [
+    ...buildPeripherals(wsFor("lab-1"), "101"),
+    ...buildPeripherals(wsFor("lab-2"), "102"),
+    ...buildPeripherals(wsFor("lab-3"), "201"),
+    ...buildPeripherals(wsFor("lab-6"), "103"),
+  ]
+
   // Tag which software preset each computer uses (for installedSoftware seed).
   const softwareKeyById = new Map()
   wsFor("lab-1").forEach((w) => softwareKeyById.set(`eq-101-${w.code}`, "hp"))
@@ -212,7 +247,7 @@ function buildSeedEquipment(workstations) {
     },
   ]
 
-  return { equipment: [...computers, ...devices], softwareKeyById }
+  return { equipment: [...computers, ...peripherals, ...devices], softwareKeyById }
 }
 
 function buildSeedInstalledSoftware(computers, softwareKeyById) {
@@ -328,6 +363,7 @@ function seed() {
       { id: EQ_CAT.COMPUTER, name: "Computador de escritorio", description: "Estaciones de trabajo", type: "COMPUTER", ...stamp },
       { id: EQ_CAT.NETWORK, name: "Dispositivo de red", description: "Switches, routers y APs", type: "NETWORK_DEVICE", ...stamp },
       { id: EQ_CAT.PROJECTOR, name: "Proyector", description: "Proyectores y periféricos", type: "PERIPHERAL", ...stamp },
+      { id: EQ_CAT.PERIPHERAL, name: "Periférico", description: "Teclados, ratones, monitores y otros", type: "PERIPHERAL", ...stamp },
     ],
     incidentTypes: [
       { id: INC_TYPE.INCIDENT, name: "Incidencia", description: "Falla o problema reportado", ...stamp },
@@ -351,11 +387,11 @@ function seed() {
       { id: "subj-6", academicProgramId: "prog-1", name: "Databases", semester: 4, ...stamp },
     ],
     users: [
-      { id: "user-admin", firstName: "System", lastName: "Administrator", email: "admin@uce.edu.ec", role: "ADMIN", enabled: true, ...stamp },
-      { id: "user-1", firstName: "Carlos", lastName: "Vásquez", email: "cvasquez@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
-      { id: "user-2", firstName: "María", lastName: "Jaramillo", email: "mjaramillo@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
-      { id: "user-3", firstName: "Luis", lastName: "Andrade", email: "landrade@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
-      { id: "user-4", firstName: "Ana", lastName: "Torres", email: "atorres@uce.edu.ec", role: "TEACHER", enabled: true, ...stamp },
+      { id: "user-admin", firstName: "System", lastName: "Administrator", email: "admin@uce.edu.ec", role: "ADMIN", enabled: true, imageUrl: null, ...stamp },
+      { id: "user-1", firstName: "Carlos", lastName: "Vásquez", email: "cvasquez@uce.edu.ec", role: "TEACHER", enabled: true, imageUrl: null, ...stamp },
+      { id: "user-2", firstName: "María", lastName: "Jaramillo", email: "mjaramillo@uce.edu.ec", role: "TEACHER", enabled: true, imageUrl: null, ...stamp },
+      { id: "user-3", firstName: "Luis", lastName: "Andrade", email: "landrade@uce.edu.ec", role: "TEACHER", enabled: true, imageUrl: null, ...stamp },
+      { id: "user-4", firstName: "Ana", lastName: "Torres", email: "atorres@uce.edu.ec", role: "TEACHER", enabled: true, imageUrl: null, ...stamp },
     ],
     teacherSubjectAssignments: [
       { id: "tsa-1", teacherId: "user-1", subjectId: "subj-1", status: "ACTIVE", ...stamp },
@@ -427,7 +463,7 @@ if (typeof window !== "undefined") {
     db = seed()
     save(db)
     // eslint-disable-next-line no-console
-    console.log("[SIGLA] Mock DB reset to seed data.")
+    console.log("[Labora] Mock DB reset to seed data.")
   }
 }
 
@@ -507,10 +543,17 @@ const equipCategoryName = (id) => db.equipmentCategories.find((c) => eqId(c.id, 
 function inventoryResponse(labId) {
   const ws = stationsOf(labId)
   const eq = equipmentOf(labId)
-  const withCat = (e) => (e ? { ...e, categoryName: equipCategoryName(e.categoryId) } : null)
+  const withCat = (e) =>
+    e
+      ? {
+          ...e,
+          categoryName: equipCategoryName(e.categoryId) || e.categoryName || null,
+          installedSoftware: softwareOf(e.id).map((s) => ({ name: s.name, version: s.version })),
+        }
+      : null
   const workstations = ws.map((w) => ({
     ...w,
-    equipment: withCat(eq.find((e) => eqId(e.workstationId, w.id))) || null,
+    equipment: eq.filter((e) => eqId(e.workstationId, w.id)).map(withCat),
   }))
   const devices = eq.filter((e) => e.workstationId == null).map(withCat)
   return {
@@ -734,6 +777,38 @@ function route(method, path, query, body) {
     u.updatedAt = nowISO()
     return u
   }
+  // User profile image (simulates Supabase Storage publicUrl with a data URL).
+  m = p.match(/^\/users\/([^/]+)\/image$/)
+  if (m) {
+    const u = userOf(m[1])
+    if (!u) notFound()
+    if (method === "POST") {
+      const MAX_BYTES = 2 * 1024 * 1024
+      if (!body || !body.dataUrl) badRequest("No se recibió ningún archivo.")
+      if (body.sizeBytes && body.sizeBytes > MAX_BYTES) badRequest("La imagen no debe superar los 2 MB.")
+      const ts = nowISO()
+      u.imageUrl = body.dataUrl
+      u.image = {
+        fileName: body.fileName || "photo",
+        contentType: body.contentType || "image/*",
+        sizeBytes: body.sizeBytes || null,
+        storagePath: `users/${u.id}/${body.fileName || "photo"}`,
+        publicUrl: body.dataUrl,
+      }
+      u.updatedAt = ts
+      return { id: uid("img"), userId: u.id, ...u.image }
+    }
+    if (method === "GET") {
+      if (!u.imageUrl || !u.image) notFound()
+      return { id: `img-${u.id}`, userId: u.id, ...u.image }
+    }
+    if (method === "DELETE") {
+      u.imageUrl = null
+      u.image = null
+      u.updatedAt = nowISO()
+      return "Deleted successfully."
+    }
+  }
   if (p === "/users") {
     if (method === "GET") {
       const list = query.role ? db.users.filter((u) => u.role === query.role) : db.users
@@ -747,6 +822,7 @@ function route(method, path, query, body) {
         email: body.email,
         role: body.role || "TEACHER",
         enabled: body.enabled !== undefined ? body.enabled : true,
+        imageUrl: null,
         createdAt: nowISO(),
         updatedAt: nowISO(),
       }
@@ -926,7 +1002,29 @@ function route(method, path, query, body) {
       if (query.workstationId) list = list.filter((e) => eqId(e.workstationId, query.workstationId))
       return list
     }
-    if (method === "POST") return crud("equipment", method, null, body)
+    if (method === "POST") {
+      const ws = body.workstationId ? db.workstations.find((w) => eqId(w.id, body.workstationId)) : null
+      const laboratoryId = ws ? ws.laboratoryId : body.laboratoryId || null
+      const lab = laboratoryId ? db.laboratories.find((l) => eqId(l.id, laboratoryId)) : null
+      const labNum = lab ? lab.code.replace(/^[^0-9]+/, "") || lab.code : "GEN"
+      const seq = db.equipment.filter((e) => eqId(e.laboratoryId, laboratoryId)).length + 1
+      const ts = nowISO()
+      const record = {
+        id: uid("eq"),
+        laboratoryId,
+        workstationId: body.workstationId || null,
+        categoryId: body.categoryId || null,
+        // Free-text category (used when "Other…" is chosen without a catalog id).
+        categoryName: body.categoryName || null,
+        code: `EQ-${labNum}-${String(seq).padStart(3, "0")}`,
+        name: body.name || "",
+        status: body.status || "ACTIVE",
+        createdAt: ts,
+        updatedAt: ts,
+      }
+      db.equipment.push(record)
+      return record
+    }
   }
   m = p.match(/^\/equipment\/([^/]+)\/status$/)
   if (m && method === "PATCH") {
@@ -1014,9 +1112,12 @@ function route(method, path, query, body) {
 
     const buildSession = (s, withStudents) => {
       if (!s) return null
+      const teacher = userOf(s.teacherId)
       const base = {
         subject: subjectOf(s.subjectId)?.name ?? null,
-        teacher: fullName(userOf(s.teacherId)) ?? null,
+        teacherId: s.teacherId ?? null,
+        teacher: fullName(teacher) ?? null,
+        teacherImageUrl: teacher?.imageUrl ?? null,
         startTime: s.startTime.slice(0, 5),
         endTime: s.endTime.slice(0, 5),
       }
@@ -1064,13 +1165,15 @@ function route(method, path, query, body) {
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
       .map((s) => {
         const lab = labOf(s.laboratoryId)
+        const teacher = userOf(s.teacherId)
         return {
           id: s.id,
           subjectId: s.subjectId,
           laboratoryId: s.laboratoryId,
           teacherId: s.teacherId,
           subject: subjectOf(s.subjectId)?.name ?? null,
-          teacher: fullName(userOf(s.teacherId)) ?? null,
+          teacher: fullName(teacher) ?? null,
+          teacherImageUrl: teacher?.imageUrl ?? null,
           laboratory: lab?.name ?? null,
           labCode: lab?.code ?? null,
           startTime: s.startTime.slice(0, 5),
@@ -1215,11 +1318,34 @@ function generateSessions(academicPeriodId, onlyIds) {
 /**
  * Entry point used by the API client. Mirrors apiFetch's signature/return.
  */
+/** Reads a File/Blob as a base64 data URL (simulates Supabase Storage publicUrl). */
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
 export async function mockApiFetch(path, options = {}) {
   await delay()
   const method = (options.method || "GET").toUpperCase()
   let body = options.body
-  if (typeof body === "string") {
+  // Multipart uploads (FormData with a `file` field) → normalize to a plain object.
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    const file = body.get("file")
+    if (file && typeof file !== "string") {
+      body = {
+        dataUrl: await fileToDataUrl(file),
+        fileName: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+      }
+    } else {
+      body = {}
+    }
+  } else if (typeof body === "string") {
     try {
       body = JSON.parse(body)
     } catch {
