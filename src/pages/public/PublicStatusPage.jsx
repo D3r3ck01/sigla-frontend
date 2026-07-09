@@ -289,9 +289,24 @@ export function PublicStatusPage() {
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 md:h-16 md:px-6">
           {/* Left */}
           <div className="flex items-center gap-2">
-            <FlaskConical className="h-6 w-6 shrink-0" aria-hidden="true" />
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" aria-hidden="true">
+              <rect width="64" height="64" rx="13" fill="#3730A3" />
+              <rect x="7" y="10" width="50" height="36" rx="3.5" fill="none" stroke="white" strokeWidth="2.5" opacity=".95" />
+              <rect x="13" y="17" width="11" height="7" rx="2" fill="white" opacity=".9" />
+              <rect x="27" y="17" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <rect x="41" y="17" width="11" height="7" rx="2" fill="white" opacity=".85" />
+              <rect x="13" y="27" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <rect x="27" y="27" width="11" height="7" rx="2" fill="white" />
+              <rect x="41" y="27" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <rect x="13" y="37" width="11" height="7" rx="2" fill="white" opacity=".85" />
+              <rect x="27" y="37" width="11" height="7" rx="2" fill="white" opacity=".85" />
+              <rect x="41" y="37" width="11" height="7" rx="2" fill="white" opacity=".4" />
+              <circle cx="32" cy="30" r="2" fill="#34D399" />
+              <rect x="29" y="46" width="6" height="6" rx="1" fill="white" opacity=".5" />
+              <rect x="22" y="52" width="20" height="3.5" rx="1.5" fill="white" opacity=".5" />
+            </svg>
             <div className="leading-tight">
-              <p className="text-lg font-bold">SIGLA UCE</p>
+              <p className="text-lg font-bold">Labora</p>
               <p className="hidden text-xs text-white/70 md:block">
                 Universidad Central del Ecuador
               </p>
@@ -512,10 +527,8 @@ export function PublicStatusPage() {
       {/* Footer */}
       <footer className="bg-[#003B7A] text-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-4 text-sm md:flex-row md:items-center md:justify-between md:px-6">
-          <p>© 2026 Universidad Central del Ecuador &mdash; Facultad de Ciencias Aplicadas</p>
-          <p className="text-xs text-white/70">
-            Los datos se actualizan automáticamente cada 60 segundos.
-          </p>
+          <p>© 2026 Universidad Central del Ecuador</p>
+          <p className="text-xs text-white/70">Sistema de gestión de laboratorios</p>
         </div>
       </footer>
     </div>
